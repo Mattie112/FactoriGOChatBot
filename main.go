@@ -210,6 +210,7 @@ func onReceiveDiscordMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
+	// Only listen on our Factorio channel
 	if m.ChannelID != discordChannelId {
 		return
 	}
@@ -219,14 +220,6 @@ func onReceiveDiscordMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	// If the message is "ping" reply with "Pong!"
 	if m.Content == "ping" {
 		_, err := s.ChannelMessageSend(m.ChannelID, "Pong!")
-		if err != nil {
-			log.WithError(err).WithFields(logrus.Fields{"message": m.Content}).Error("Failed to send message to Discord")
-		}
-	}
-
-	// If the message is "pong" reply with "Ping!"
-	if m.Content == "pong" {
-		_, err := s.ChannelMessageSend(m.ChannelID, "Ping!")
 		if err != nil {
 			log.WithError(err).WithFields(logrus.Fields{"message": m.Content}).Error("Failed to send message to Discord")
 		}
