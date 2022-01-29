@@ -51,7 +51,7 @@ func main() {
 
 	go sendDiscordToFactorio(rconClient)
 	go readFactorioLogFile()
-	go sendMessageToFactorio(discord)
+	go sendMessageToDiscord(discord)
 
 	// Keep running until getting exit signal
 	sc := make(chan os.Signal, 1)
@@ -63,15 +63,17 @@ func main() {
 	_ = watcher.Close()
 }
 
+// Read the last line of a file and puts the parsed message on our output channel
 func readFactorioLogFile() {
 	for fileName := range readLogFile {
 		log.Debug("Trigger to read Factorio logfile")
 		line := getLastLineWithSeek(fileName)
 		log.WithFields(logrus.Fields{"line": line}).Debug("Read line from Factorio log")
-		messagesToFactorio <- parseAndFormatMessage(line)
+		messagesToDiscord <- parseAndFormatMessage(line)
 	}
 }
 
+// Parse the message and format it in a way for Discord
 func parseAndFormatMessage(message string) string {
 	var re = regexp.MustCompile(`(?m)\[(\w*)]`)
 	messageType := re.FindStringSubmatch(message)
@@ -110,8 +112,9 @@ func parseModLogEntries(message string) string {
 	}
 }
 
-func sendMessageToFactorio(discord *discordgo.Session) {
-	for message := range messagesToFactorio {
+// Send me
+func sendMessageToDiscord(discord *discordgo.Session) {
+	for message := range messagesToDiscord {
 		_, err := discord.ChannelMessageSend(discordChannelId, message)
 		if err != nil {
 			log.WithError(err).WithFields(logrus.Fields{"message": message}).Error("Failed to post message to Discord")
@@ -164,7 +167,7 @@ func setupFileReader() *fsnotify.Watcher {
 
 func sendDiscordToFactorio(rconClient *rcon.Client) {
 	log.Debugf("Setting up message handler")
-	for message := range messagesToDiscord {
+	for message := range messagesToFactorio {
 		message = strings.Replace(message, "'", "\\'", -1)
 		cmd := "/silent-command game.print('[color=#7289DA][Discord]" + message + "[/color]')"
 		log.WithFields(logrus.Fields{"cmd": cmd}).Debug("Sending command to Factorio (through RCON)")
@@ -231,7 +234,7 @@ func onReceiveDiscordMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if nick == "" {
 		nick = m.Author.Username
 	}
-	messagesToDiscord <- fmt.Sprintf("[%s]: %s", nick, m.Content)
+	messagesToFactorio <- fmt.Sprintf("[%s]: %s", nick, m.Content)
 }
 
 func getLoggerFromConfig(logLevel, env string) *logrus.Logger {
