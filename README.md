@@ -27,6 +27,8 @@ Simply download the Unix or Windows binary from this repo and run the executeabl
 
 ### Docker
 
+Get the image from https://hub.docker.com/r/mattie112/factorigo-chat-bot and run it with the variables as listed above
+
 ### Build from source
 Unix:
 `GOOS=linux GARCH=amd64 CGO_ENABLED=0 go build -ldflags "-X main.VERSION=$(git rev-parse --short HEAD) -X main.BUILDTIME=`date -u +%Y%m%d.%H%M%S`" -o ./bin/factorigo-chat-bot`
