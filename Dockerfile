@@ -1,4 +1,5 @@
 FROM alpine:latest
-COPY ./bin/factorigo-chat-bot /factorigo-chat-bot
+WORKDIR /opt/project
+COPY ./bin/factorigo-chat-bot /opt/project/factorigo-chat-bot
 
-ENTRYPOINT ["factorigo-chat-bot"]
+ENTRYPOINT ["/opt/project/factorigo-chat-bot"]

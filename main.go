@@ -74,6 +74,11 @@ func main() {
 func parseAndFormatMessage(message string) string {
 	var re = regexp.MustCompile(`(?m)\[(\w*)]`)
 	messageType := re.FindStringSubmatch(message)
+
+	if len(messageType) < 2 {
+		return ""
+	}
+
 	switch messageType[1] {
 	case "FactoriGOChatBot":
 		// Extracted to keep function small
@@ -91,14 +96,14 @@ func parseAndFormatMessage(message string) string {
 		match := re.FindStringSubmatch(message)
 		return fmt.Sprintf(":red_circle: | `%s` left the game!", match[1])
 	default:
-		log.WithField("message", message).Warning("Could not parse message from Factorio, sending raw message to Discord")
-		return message
+		log.WithField("message", message).Debug("Could not parse message from Factorio, ignoring")
+		return ""
 	}
 }
 
 // With the companion mod (or manual edit of save game) we can extract extra information!
 func parseModLogEntries(message string) string {
-	var re = regexp.MustCompile(`(?m) \[(.*):`)
+	var re = regexp.MustCompile(`(?mU) \[(.*):`)
 	messageType := re.FindStringSubmatch(message)
 	switch messageType[1] {
 	case "RESEARCH_STARTED":
@@ -114,8 +119,8 @@ func parseModLogEntries(message string) string {
 		match := re.FindStringSubmatch(message)
 		return fmt.Sprintf(":skull: | Player died: `%s`", match[1])
 	default:
-		log.WithField("message", message).Warning("Could not parse message from mod, sending raw message to Discord")
-		return message
+		log.WithField("message", message).Debug("Could not parse message from mod, ignoring")
+		return ""
 	}
 }
 
@@ -177,7 +182,10 @@ func readFactorioLogFile() {
 		log.Debug("Trigger to read Factorio logfile")
 		line := getLastLineWithSeek(fileName)
 		log.WithFields(logrus.Fields{"line": line}).Debug("Read line from Factorio log")
-		messagesToDiscord <- parseAndFormatMessage(line)
+		message := parseAndFormatMessage(line)
+		if message != "" {
+			messagesToDiscord <- message
+		}
 	}
 }
 
