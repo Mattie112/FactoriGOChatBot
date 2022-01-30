@@ -4,10 +4,8 @@ import (
 	"fmt"
 	"github.com/bwmarrin/discordgo"
 	"github.com/forewing/csgo-rcon"
-	"github.com/fsnotify/fsnotify"
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
-	"io"
 	"os"
 	"os/signal"
 	"regexp"
@@ -17,13 +15,15 @@ import (
 )
 
 var (
-	log                 *logrus.Logger
-	messagesToDiscord   chan string
-	messagesToFactorio  chan string
-	readLogFile         chan string
-	factorioLogFilePath string
-	modLogPath          string
-	discordChannelId    string
+	log                *logrus.Logger
+	messagesToDiscord  chan string
+	messagesToFactorio chan string
+	readLogFile        chan string
+	discordChannelId   string
+	// VERSION These can be injected at build time -ldflags "-InputArgs main.VERSION=dev main.BUILD_TIME=201610251410"
+	VERSION = "Undefined"
+	// BUILDTIME These can be injected at build time -ldflags "-InputArgs main.VERSION=dev main.BUILD_TIME=201610251410"
+	BUILDTIME = "Undefined"
 )
 
 func main() {
@@ -34,12 +34,11 @@ func main() {
 		}
 	}
 
-	log = getLoggerFromConfig(os.Getenv("LOG_LEVEL"), os.Getenv("ENV"))
-	log.Infoln("Starting FactoriGO Chat Bot")
+	log = getLoggerFromConfig(os.Getenv("LOG_LEVEL"))
+	log.Infof("Starting FactoriGO Chat Bot %s - %s", VERSION, BUILDTIME)
+	checkRequiredEnvVariables()
 
-	factorioLogFilePath = os.Getenv("FACTORIO_LOG")
 	discordChannelId = os.Getenv("DISCORD_CHANNEL_ID")
-	modLogPath = os.Getenv("MOD_LOG")
 
 	messagesToDiscord = make(chan string)
 	messagesToFactorio = make(chan string)
@@ -47,9 +46,17 @@ func main() {
 
 	discord := setUpDiscord()
 	rconClient := setUpRCON()
-	watcher := setupFileReader()
 
-	go sendDiscordToFactorio(rconClient)
+	//Setup file watcher
+	var paths []string
+	paths = append(paths, os.Getenv("FACTORIO_LOG"))
+	if os.Getenv("MOD_LOG") != "" {
+		paths = append(paths, os.Getenv("MOD_LOG"))
+	}
+	watcher := setupFileWatcher(paths)
+
+	// Start functions that handle the dataflow
+	go sendMessageToFactorio(rconClient)
 	go readFactorioLogFile()
 	go sendMessageToDiscord(discord)
 
@@ -63,22 +70,12 @@ func main() {
 	_ = watcher.Close()
 }
 
-// Read the last line of a file and puts the parsed message on our output channel
-func readFactorioLogFile() {
-	for fileName := range readLogFile {
-		log.Debug("Trigger to read Factorio logfile")
-		line := getLastLineWithSeek(fileName)
-		log.WithFields(logrus.Fields{"line": line}).Debug("Read line from Factorio log")
-		messagesToDiscord <- parseAndFormatMessage(line)
-	}
-}
-
 // Parse the message and format it in a way for Discord
 func parseAndFormatMessage(message string) string {
 	var re = regexp.MustCompile(`(?m)\[(\w*)]`)
 	messageType := re.FindStringSubmatch(message)
 	switch messageType[1] {
-	case "FactorioChatBot":
+	case "FactoriGOChatBot":
 		// Extracted to keep function small
 		return parseModLogEntries(message)
 	case "CHAT":
@@ -94,6 +91,7 @@ func parseAndFormatMessage(message string) string {
 		match := re.FindStringSubmatch(message)
 		return fmt.Sprintf(":red_circle: | `%s` left the game!", match[1])
 	default:
+		log.WithField("message", message).Warning("Could not parse message from Factorio, sending raw message to Discord")
 		return message
 	}
 }
@@ -107,12 +105,20 @@ func parseModLogEntries(message string) string {
 		var re = regexp.MustCompile(`(?m):(\S*)]`)
 		match := re.FindStringSubmatch(message)
 		return fmt.Sprintf(":microscope: | Research started: `%s`", match[1])
+	case "RESEARCH_FINISHED":
+		var re = regexp.MustCompile(`(?m):(\S*)]`)
+		match := re.FindStringSubmatch(message)
+		return fmt.Sprintf(":microscope: | Research finished: `%s`", match[1])
+	case "PLAYER_DIED":
+		var re = regexp.MustCompile(`(?m):(\S*)]`)
+		match := re.FindStringSubmatch(message)
+		return fmt.Sprintf(":skull: | Player died: `%s`", match[1])
 	default:
-		return "whoopsie 2"
+		log.WithField("message", message).Warning("Could not parse message from mod, sending raw message to Discord")
+		return message
 	}
 }
 
-// Send me
 func sendMessageToDiscord(discord *discordgo.Session) {
 	for message := range messagesToDiscord {
 		_, err := discord.ChannelMessageSend(discordChannelId, message)
@@ -122,50 +128,7 @@ func sendMessageToDiscord(discord *discordgo.Session) {
 	}
 }
 
-func setupFileReader() *fsnotify.Watcher {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	go func() {
-		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				log.WithField("eventName", event).Debug("event")
-				if event.Op&fsnotify.Write == fsnotify.Write {
-					log.WithField("eventName", event.Name).Debug("modified file")
-					readLogFile <- event.Name
-				}
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				log.Println("error:", err)
-				log.WithError(err).Error("Unable to watch Factorio log file for changes")
-			}
-		}
-	}()
-
-	err = watcher.Add(factorioLogFilePath)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if modLogPath != "" {
-		err = watcher.Add(modLogPath)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	return watcher
-}
-
-func sendDiscordToFactorio(rconClient *rcon.Client) {
+func sendMessageToFactorio(rconClient *rcon.Client) {
 	log.Debugf("Setting up message handler")
 	for message := range messagesToFactorio {
 		message = strings.Replace(message, "'", "\\'", -1)
@@ -176,35 +139,6 @@ func sendDiscordToFactorio(rconClient *rcon.Client) {
 			log.WithError(err).WithFields(logrus.Fields{"cmd": cmd}).Error("Unable to send message to Factorio")
 		}
 	}
-}
-
-func setUpRCON() *rcon.Client {
-	rconIp := os.Getenv("RCON_IP")
-	rconPort := os.Getenv("RCON_PORT")
-	rconPassword := os.Getenv("RCON_PASSWORD")
-	rconClient := rcon.New(rconIp+":"+rconPort, rconPassword, time.Second*2)
-	return rconClient
-}
-
-func setUpDiscord() *discordgo.Session {
-	discordToken := os.Getenv("DISCORD_TOKEN")
-
-	discord, err := discordgo.New("Bot " + discordToken)
-	if err != nil {
-		log.WithFields(logrus.Fields{"err": err, "token": discordToken}).Panic("Could register bot with Discord")
-	}
-
-	// Listen to incoming messagesToDiscord from Discord
-	discord.AddHandler(onReceiveDiscordMessage)
-	discord.Identify.Intents = discordgo.IntentsGuildMessages
-
-	// Open socket to Discord
-	if discord.Open() != nil {
-		log.WithFields(logrus.Fields{"err": err}).Panic("Cannot open socket to Discord")
-	}
-
-	log.Infoln("Bot registered by Discord and is now listening for messagesToDiscord")
-	return discord
 }
 
 func onReceiveDiscordMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -237,57 +171,50 @@ func onReceiveDiscordMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	messagesToFactorio <- fmt.Sprintf("[%s]: %s", nick, m.Content)
 }
 
-func getLoggerFromConfig(logLevel, env string) *logrus.Logger {
-	logLevel = strings.ToLower(logLevel)
-	env = strings.ToLower(env)
-	log := logrus.New()
-	log.SetFormatter(&logrus.TextFormatter{ForceQuote: true, TimestampFormat: time.RFC3339Nano})
-
-	switch logLevel {
-	case "debug":
-		log.Level = logrus.DebugLevel
-	case "info":
-		log.Level = logrus.InfoLevel
-	case "warning":
-		log.Level = logrus.WarnLevel
-	case "fatal":
-		log.Level = logrus.FatalLevel
-	default:
-		log.Level = logrus.InfoLevel
+// Read the last line of a file and puts the parsed message on our output channel
+func readFactorioLogFile() {
+	for fileName := range readLogFile {
+		log.Debug("Trigger to read Factorio logfile")
+		line := getLastLineWithSeek(fileName)
+		log.WithFields(logrus.Fields{"line": line}).Debug("Read line from Factorio log")
+		messagesToDiscord <- parseAndFormatMessage(line)
 	}
-	return log
 }
 
-func getLastLineWithSeek(filepath string) string {
-	fileHandle, err := os.Open(filepath)
+func setUpRCON() *rcon.Client {
+	rconIp := os.Getenv("RCON_IP")
+	rconPort := os.Getenv("RCON_PORT")
+	rconPassword := os.Getenv("RCON_PASSWORD")
+	rconClient := rcon.New(rconIp+":"+rconPort, rconPassword, time.Second*2)
+	return rconClient
+}
 
+func setUpDiscord() *discordgo.Session {
+	discordToken := os.Getenv("DISCORD_TOKEN")
+
+	discord, err := discordgo.New("Bot " + discordToken)
 	if err != nil {
-		panic("Cannot open file")
-		os.Exit(1)
-	}
-	defer fileHandle.Close()
-
-	line := ""
-	var cursor int64 = 0
-	stat, _ := fileHandle.Stat()
-	filesize := stat.Size()
-	for {
-		cursor -= 1
-		fileHandle.Seek(cursor, io.SeekEnd)
-
-		char := make([]byte, 1)
-		fileHandle.Read(char)
-
-		if cursor != -1 && (char[0] == 10 || char[0] == 13) { // stop if we find a line
-			break
-		}
-
-		line = fmt.Sprintf("%s%s", string(char), line) // there is more efficient way
-
-		if cursor == -filesize { // stop if we are at the begining
-			break
-		}
+		log.WithFields(logrus.Fields{"err": err, "token": discordToken}).Panic("Could register bot with Discord")
 	}
 
-	return line
+	// Listen to incoming messagesToDiscord from Discord
+	discord.AddHandler(onReceiveDiscordMessage)
+	discord.Identify.Intents = discordgo.IntentsGuildMessages
+
+	// Open socket to Discord
+	if discord.Open() != nil {
+		log.WithFields(logrus.Fields{"err": err}).Panic("Cannot open socket to Discord")
+	}
+
+	log.Infoln("Bot registered by Discord and is now listening for messagesToDiscord")
+	return discord
+}
+
+func checkRequiredEnvVariables() {
+	vars := []string{"DISCORD_TOKEN", "DISCORD_CHANNEL_ID", "RCON_IP", "RCON_PORT", "RCON_PASSWORD", "FACTORIO_LOG"}
+	for _, envVar := range vars {
+		if os.Getenv(envVar) == "" {
+			log.WithField("envVar", envVar).Fatal("Could not find required ENV VAR")
+		}
+	}
 }

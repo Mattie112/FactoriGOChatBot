@@ -1,0 +1,6 @@
+services:
+  builder:
+    image: golang
+    volumes:
+    - .:/opt/project
+    working_dir: /opt/project
