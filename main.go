@@ -105,6 +105,11 @@ func parseAndFormatMessage(message string) string {
 func parseModLogEntries(message string) string {
 	var re = regexp.MustCompile(`(?mU) \[(.*):`)
 	messageType := re.FindStringSubmatch(message)
+
+	if len(messageType) < 1 {
+		return ""
+	}
+
 	switch messageType[1] {
 	case "RESEARCH_STARTED":
 		var re = regexp.MustCompile(`(?m):(\S*)]`)

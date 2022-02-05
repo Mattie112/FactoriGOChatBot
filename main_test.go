@@ -18,6 +18,8 @@ func Test_parseAndFormatMessage(t *testing.T) {
 		{"PLAYER_DIED", args{message: "[FactoriGOChatBot]: \"2852569 [PLAYER_DIED:Mattie]\""}, ":skull: | Player died: `Mattie`"},
 		{"RESEARCH_STARTED", args{message: "[FactoriGOChatBot]: \"3045105 [RESEARCH_STARTED:nuclear-power]\""}, ":microscope: | Research started: `nuclear-power`"},
 		{"RESEARCH_FINISHED", args{message: "[FactoriGOChatBot]: \"3229214 [RESEARCH_FINISHED:nuclear-power]\""}, ":microscope: | Research finished: `nuclear-power`"},
+		// Corrupted messages (as I don't know yet how to fix the file read, so it will have a single line guaranteed
+		{"CORRUPT", args{message: "[FactoriGOChatBot]: \"2852569 [foobar]\""}, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
