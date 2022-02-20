@@ -120,9 +120,9 @@ func parseModLogEntries(message string) string {
 		match := re.FindStringSubmatch(message)
 		return fmt.Sprintf(":microscope: | Research finished: `%s`", match[1])
 	case "PLAYER_DIED":
-		var re = regexp.MustCompile(`(?m):(\S*)]`)
+		var re = regexp.MustCompile(`(?m):(\S*):(\S*)]`)
 		match := re.FindStringSubmatch(message)
-		return fmt.Sprintf(":skull: | Player died: `%s`", match[1])
+		return fmt.Sprintf(":skull: | Player died: `%s`, cause: `%s`", match[1], match[2])
 	default:
 		log.WithField("message", message).Debug("Could not parse message from mod, ignoring")
 		return ""
@@ -178,7 +178,17 @@ func onReceiveDiscordMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if nick == "" {
 		nick = m.Author.Username
 	}
-	messagesToFactorio <- fmt.Sprintf("[%s]: %s", nick, m.Content)
+
+	// Parse message (and handle multilines)
+	messages := parseDiscordMessage(m.Content)
+	for _, message := range messages {
+		messagesToFactorio <- fmt.Sprintf("[%s]: %s", nick, message)
+	}
+}
+
+func parseDiscordMessage(message string) []string {
+	messages := strings.Split(message, "\n")
+	return messages
 }
 
 // Read the last line of a file and puts the parsed message on our output channel
