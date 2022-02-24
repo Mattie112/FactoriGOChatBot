@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/bwmarrin/discordgo"
+	"github.com/forPelevin/gomoji"
 	"github.com/forewing/csgo-rcon"
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
@@ -120,7 +121,7 @@ func parseModLogEntries(message string) string {
 		match := re.FindStringSubmatch(message)
 		return fmt.Sprintf(":microscope: | Research finished: `%s`", match[1])
 	case "PLAYER_DIED":
-		var re = regexp.MustCompile(`(?m):(\w*)+`)
+		var re = regexp.MustCompile(`(?m):([\w ]*)+`)
 		match := re.FindAllStringSubmatch(message, -1)
 		if len(match) == 3 {
 			return fmt.Sprintf(":skull: | Player died: `%s`, cause: `%s`", match[1][1], match[2][1])
@@ -179,7 +180,6 @@ func onReceiveDiscordMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	// Send message away!
-	log.WithFields(logrus.Fields{"message": m.Content}).Debugf("Sending Discord message to output channel")
 	nick := m.Member.Nick
 	if nick == "" {
 		nick = m.Author.Username
@@ -187,12 +187,19 @@ func onReceiveDiscordMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	// Parse message (and handle multilines)
 	messages := parseDiscordMessage(m.Content)
+	log.WithFields(logrus.Fields{"messages": messages}).Debugf("Sending Discord message to output channel")
 	for _, message := range messages {
 		messagesToFactorio <- fmt.Sprintf("[%s]: %s", nick, message)
 	}
 }
 
 func parseDiscordMessage(message string) []string {
+	if gomoji.ContainsEmoji(message) {
+		res := gomoji.FindAll(message)
+		for _, emoji := range res {
+			message = strings.Replace(message, emoji.Character, "**"+emoji.Slug+"**", -1)
+		}
+	}
 	messages := strings.Split(message, "\n")
 	return messages
 }
