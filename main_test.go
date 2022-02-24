@@ -21,6 +21,7 @@ func Test_parseAndFormatMessage(t *testing.T) {
 		{"PLAYER_DIED", args{message: "[FactoriGOChatBot]: \"2852569 [PLAYER_DIED:Mattie]\""}, ":skull: | Player died: `Mattie` (unknown cause)"},
 		{"PLAYER_DIED_CAUSE", args{message: "[FactoriGOChatBot]: \"2852569 [PLAYER_DIED:Mattie:locomotive]\""}, ":skull: | Player died: `Mattie`, cause: `locomotive`"},
 		{"PLAYER_DIED_CAUSE2", args{message: "[FactoriGOChatBot]: \"2852569 [PLAYER_DIED:Mattie:big worm]\""}, ":skull: | Player died: `Mattie`, cause: `big worm`"},
+		{"PLAYER_DIED_CAUSE2", args{message: "[[FactoriGOChatBot]: \"11083545 [PLAYER_DIED:Vance307:behemoth-spitter]\""}, ":skull: | Player died: `Vance307`, cause: `behemoth-spitter`"},
 		{"RESEARCH_STARTED", args{message: "[FactoriGOChatBot]: \"3045105 [RESEARCH_STARTED:nuclear-power]\""}, ":microscope: | Research started: `nuclear-power`"},
 		{"RESEARCH_FINISHED", args{message: "[FactoriGOChatBot]: \"3229214 [RESEARCH_FINISHED:nuclear-power]\""}, ":microscope: | Research finished: `nuclear-power`"},
 		// Corrupted messages (as I don't know yet how to fix the file read, so it will have a single line guaranteed

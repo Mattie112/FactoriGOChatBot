@@ -121,7 +121,7 @@ func parseModLogEntries(message string) string {
 		match := re.FindStringSubmatch(message)
 		return fmt.Sprintf(":microscope: | Research finished: `%s`", match[1])
 	case "PLAYER_DIED":
-		var re = regexp.MustCompile(`(?m):([\w ]*)+`)
+		var re = regexp.MustCompile(`(?m):([\w -]*)+`)
 		match := re.FindAllStringSubmatch(message, -1)
 		if len(match) == 3 {
 			return fmt.Sprintf(":skull: | Player died: `%s`, cause: `%s`", match[1][1], match[2][1])
