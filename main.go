@@ -82,7 +82,7 @@ func parseAndFormatMessage(message string) string {
 
 	switch messageType[1] {
 	case "FactoriGOChatBot":
-		// Extracted to keep function small
+		// Extracted to keep this function small
 		return parseModLogEntries(message)
 	case "CHAT":
 		var re = regexp.MustCompile(`(?m)] (.*): (.*)`)
@@ -123,12 +123,33 @@ func parseModLogEntries(message string) string {
 	case "PLAYER_DIED":
 		var re = regexp.MustCompile(`(?m):([\w -]*)+`)
 		match := re.FindAllStringSubmatch(message, -1)
-		if len(match) == 3 {
-			return fmt.Sprintf(":skull: | Player died: `%s`, cause: `%s`", match[1][1], match[2][1])
-		}
+
+		// No cause
 		if len(match) == 2 {
 			return fmt.Sprintf(":skull: | Player died: `%s` (unknown cause)", match[1][1])
 		}
+
+		cause := match[2][1]
+		addText := ""
+
+		if cause == "locomotive" || cause == "cargo-wagon" || cause == "artillery-wagon" || cause == "fluid-wagon" {
+			addText = " (hahaha!)"
+		}
+
+		if cause == "cargo-wagon" || cause == "artillery-wagon" || cause == "fluid-wagon" {
+			addText = " (hahaha! how the hell did you do that?!?!)"
+		}
+
+		// Only cause (companion mod <= 0.5.0
+		if len(match) == 3 {
+			return fmt.Sprintf(":skull: | Player died: `%s`, cause: `%s`%s", match[1][1], cause, addText)
+		}
+
+		// Cause and death count (companion mod >= 0.6.0)
+		if len(match) == 5 {
+			return fmt.Sprintf(":skull: | Player died: `%s`, cause: `%s`%s (%s times out of %s deaths)", match[1][1], cause, addText, match[3][1], match[4][1])
+		}
+
 		return ""
 	default:
 		log.WithField("message", message).Debug("Could not parse message from mod, ignoring")
