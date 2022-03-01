@@ -29,6 +29,7 @@ func Test_parseAndFormatMessage(t *testing.T) {
 		{"PLAYER_DIED_CAUSE", args{message: "[FactoriGOChatBot]: \"2852569 [PLAYER_DIED:Mattie:cargo-wagon:10:50]\""}, ":skull: | Player died: `Mattie`, cause: `cargo-wagon` (hahaha! how the hell did you do that?!?!) (10 times out of 50 deaths)"},
 		{"PLAYER_DIED_CAUSE", args{message: "[FactoriGOChatBot]: \"2852569 [PLAYER_DIED:Vance307:behemoth-spitter:1:1]\""}, ":skull: | Player died: `Vance307`, cause: `behemoth-spitter` (1 times out of 1 deaths)"},
 		{"PLAYER_DIED_CAUSE", args{message: "[FactoriGOChatBot]: \"2852569 [PLAYER_DIED:Mattie:character:1:2]\""}, ":skull: | Player died: `Mattie`, cause: `character` (1 times out of 2 deaths)"},
+		{"PLAYER_DIED_CAUSE", args{message: "[FactoriGOChatBot]: \"36777 [PLAYER_DIED:Mattie:small-biter:0:4]\""}, ":skull: | Player died: `Mattie`, cause: `small-biter` (0 times out of 4 deaths)"},
 		// Research
 		{"RESEARCH_STARTED", args{message: "[FactoriGOChatBot]: \"3045105 [RESEARCH_STARTED:nuclear-power]\""}, ":microscope: | Research started: `nuclear-power`"},
 		{"RESEARCH_FINISHED", args{message: "[FactoriGOChatBot]: \"3229214 [RESEARCH_FINISHED:nuclear-power]\""}, ":microscope: | Research finished: `nuclear-power`"},
