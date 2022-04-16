@@ -147,6 +147,10 @@ func parseModLogEntries(message string) string {
 			addText = " (hahaha! how the hell did you do that?!?!)"
 		}
 
+		if cause == "" {
+			cause = "unknown"
+		}
+
 		// Only cause (companion mod <= 0.5.0
 		if len(match) == 3 {
 			return fmt.Sprintf(":skull: | Player died: `%s`, cause: `%s`%s", match[1][1], cause, addText)
