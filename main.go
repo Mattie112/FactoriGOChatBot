@@ -87,7 +87,14 @@ func parseAndFormatMessage(message string) string {
 	case "CHAT":
 		var re = regexp.MustCompile(`(?m)] (.*): (.*)`)
 		match := re.FindStringSubmatch(message)
-		return fmt.Sprintf(":speech_left: | `%s`: %s", match[1], match[2])
+
+		// Ignore GPS (= map pings)
+		messageContent := match[2]
+		if strings.Contains(messageContent, "[gps=") {
+			return ""
+		}
+
+		return fmt.Sprintf(":speech_left: | `%s`: %s", match[1], messageContent)
 	case "JOIN":
 		var re = regexp.MustCompile(`(?m)] (\w*)`)
 		match := re.FindStringSubmatch(message)

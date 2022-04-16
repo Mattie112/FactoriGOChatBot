@@ -35,6 +35,8 @@ func Test_parseAndFormatMessage(t *testing.T) {
 		{"RESEARCH_FINISHED", args{message: "[FactoriGOChatBot]: \"3229214 [RESEARCH_FINISHED:nuclear-power]\""}, ":microscope: | Research finished: `nuclear-power`"},
 		// Corrupted messages (as I don't know yet how to fix the file read, so it will have a single line guaranteed
 		{"CORRUPT", args{message: "[FactoriGOChatBot]: \"2852569 [foobar]\""}, ""},
+		// Messages I want to ignore
+		{"GPS", args{message: "2022-04-14 19:41:54 [CHAT] Mattie: [gps=98,69]"}, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
