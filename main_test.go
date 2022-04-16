@@ -35,6 +35,8 @@ func Test_parseAndFormatMessage(t *testing.T) {
 		// Research
 		{"RESEARCH_STARTED", args{message: "[FactoriGOChatBot]: \"3045105 [RESEARCH_STARTED:nuclear-power]\""}, ":microscope: | Research started: `nuclear-power`"},
 		{"RESEARCH_FINISHED", args{message: "[FactoriGOChatBot]: \"3229214 [RESEARCH_FINISHED:nuclear-power]\""}, ":microscope: | Research finished: `nuclear-power`"},
+		// Rocket
+		{"ROCKET_LAUNCHED", args{message: "[FactoriGOChatBot]: \"12393460 [ROCKET_LAUNCHED:1]\""}, ":rocket: :rocket: :rocket: A rocket has been launched! (1 times)"},
 		// Corrupted messages (as I don't know yet how to fix the file read, so it will have a single line guaranteed
 		{"CORRUPT", args{message: "[FactoriGOChatBot]: \"2852569 [foobar]\""}, ""},
 		// Messages I want to ignore
