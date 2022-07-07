@@ -165,7 +165,8 @@ func parseModLogEntries(message string) string {
 	case "ROCKET_LAUNCHED":
 		var re = regexp.MustCompile(`(?m):(\d*)]`)
 		match := re.FindStringSubmatch(message)
-		return fmt.Sprintf(":rocket: :rocket: :rocket: A rocket has been launched! (%s times)", match[1])
+		// return fmt.Sprintf(":rocket: :rocket: :rocket: A rocket has been launched! (%s times)", match[1])
+		return ""
 	default:
 		log.WithField("message", message).Debug("Could not parse message from mod, ignoring")
 		return ""
