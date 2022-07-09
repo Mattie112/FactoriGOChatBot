@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -25,6 +26,7 @@ var (
 	VERSION = "Undefined"
 	// BUILDTIME These can be injected at build time -ldflags "-InputArgs main.VERSION=dev main.BUILD_TIME=201610251410"
 	BUILDTIME = "Undefined"
+	config    sConfig
 )
 
 func main() {
@@ -38,6 +40,7 @@ func main() {
 	log = getLoggerFromConfig(os.Getenv("LOG_LEVEL"))
 	log.Infof("Starting FactoriGO Chat Bot %s - %s", VERSION, BUILDTIME)
 	checkRequiredEnvVariables()
+	config = loadConfig() // Load optional config
 
 	discordChannelId = os.Getenv("DISCORD_CHANNEL_ID")
 
@@ -69,6 +72,11 @@ func main() {
 	// Cleanup
 	_ = discord.Close()
 	_ = watcher.Close()
+}
+
+func loadConfig() sConfig {
+	var c = sConfig{allRocketLaunches: getenvBool("ALL_ROCKET_LAUNCHES")}
+	return c
 }
 
 // Parse the message and format it in a way for Discord
@@ -165,7 +173,21 @@ func parseModLogEntries(message string) string {
 	case "ROCKET_LAUNCHED":
 		var re = regexp.MustCompile(`(?m):(\d*)]`)
 		match := re.FindStringSubmatch(message)
-		return fmt.Sprintf(":rocket: :rocket: :rocket: A rocket has been launched! (%s times)", match[1])
+		launchAmount, _ := strconv.Atoi(match[1])
+
+		if config.allRocketLaunches {
+			return fmt.Sprintf(":rocket: :rocket: :rocket: A rocket has been launched! (%d times)", launchAmount)
+		} else {
+			switch {
+			case launchAmount <= 5:
+				fallthrough
+			case launchAmount >= 10 && launchAmount%10 == 0:
+				fallthrough
+			case launchAmount >= 10 && launchAmount%100 == 0:
+				return fmt.Sprintf(":rocket: :rocket: :rocket: A rocket has been launched! (%d times)", launchAmount)
+			}
+		}
+		return ""
 	default:
 		log.WithField("message", message).Debug("Could not parse message from mod, ignoring")
 		return ""
@@ -289,4 +311,29 @@ func checkRequiredEnvVariables() {
 			log.WithField("envVar", envVar).Fatal("Could not find required ENV VAR")
 		}
 	}
+}
+func getenvStr(key string) (string, error) {
+	v := os.Getenv(key)
+	return v, nil
+}
+
+func getenvBool(key string) bool {
+	s, err := getenvStr(key)
+	if err != nil {
+		log.WithField("envVar", key).WithError(err).Error("Cannot parse env variable as boolean")
+		return false
+	}
+	if s == "" {
+		return false // No env var is false
+	}
+	v, err := strconv.ParseBool(s)
+	if err != nil {
+		log.WithField("envVar", key).WithError(err).Error("Cannot parse env variable as boolean")
+		return false
+	}
+	return v
+}
+
+type sConfig struct {
+	allRocketLaunches bool
 }
