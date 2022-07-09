@@ -107,7 +107,7 @@ Run: `docker-compose run --rm builder` then copy/paste the commands listed above
 
 In order to build a docker image, first run the commands above and then:
 
-- `docker build -t mattie112/factorigo-chat-bot:latest`
+- `docker build -t mattie112/factorigo-chat-bot:latest .`
 - `docker push mattie112/factorigo-chat-bot:latest`
 
 ## Extra data supported:
