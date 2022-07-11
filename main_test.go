@@ -44,6 +44,7 @@ func Test_parseAndFormatMessage(t *testing.T) {
 		{"ROCKET_LAUNCHED_500", args{message: "[FactoriGOChatBot]: \"12393460 [ROCKET_LAUNCHED:500]\""}, ":rocket: :rocket: :rocket: A rocket has been launched! (500 times)"},
 		{"ROCKET_LAUNCHED_11", args{message: "[FactoriGOChatBot]: \"12393460 [ROCKET_LAUNCHED:11]\""}, ""},
 		{"ROCKET_LAUNCHED_101", args{message: "[FactoriGOChatBot]: \"12393460 [ROCKET_LAUNCHED:101]\""}, ""},
+		{"ROCKET_LAUNCHED_220", args{message: "[FactoriGOChatBot]: \"12393460 [ROCKET_LAUNCHED:220]\""}, ""},
 		{"ROCKET_LAUNCHED_1337", args{message: "[FactoriGOChatBot]: \"12393460 [ROCKET_LAUNCHED:1337]\""}, ""},
 		// Corrupted messages (as I don't know yet how to fix the file read, so it will have a single line guaranteed
 		{"CORRUPT", args{message: "[FactoriGOChatBot]: \"2852569 [foobar]\""}, ""},
