@@ -181,7 +181,7 @@ func parseModLogEntries(message string) string {
 			switch {
 			case launchAmount <= 5:
 				fallthrough
-			case launchAmount >= 10 && launchAmount%10 == 0:
+			case launchAmount >= 10 && launchAmount < 100 && launchAmount%10 == 0:
 				fallthrough
 			case launchAmount >= 100 && launchAmount%100 == 0:
 				return fmt.Sprintf(":rocket: :rocket: :rocket: A rocket has been launched! (%d times)", launchAmount)
