@@ -16,11 +16,14 @@ You will need to create your own 'bot' (application).
 - Go to: https://discord.com/developers/applications
 - Click 'New Application'
 - Give the bot a name
-- When created go to the 'Bot' tab and get your token
+- Go to the 'Bot' tab
+- Click 'Add Bot'
+- Enabled 'Message Content Intent'
+- Generate token
 
 ### Invite the bot
 - Go to the 'General Information' tab and get your application ID
-- Go to: https://discord.com/oauth2/authorize?client_id=<appid>>&permissions=377957370944&scope=bot
+- Go to: https://discord.com/oauth2/authorize?client_id={appid}&permissions=377957370944&scope=bot (Replace `{appid}` with your application ID)
 - Then login and add the bot to your server
 
 ### Get channel ID
