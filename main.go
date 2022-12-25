@@ -110,12 +110,12 @@ func parseAndFormatMessage(message string) string {
 
 		return fmt.Sprintf(":speech_left: | `%s`: %s", match[1], messageContent)
 	case "JOIN":
-		updateDiscordStatus(discordgo.ActivityTypeWatching, "the factory grow")
+		commands <- "playerCount"
 		var re = regexp.MustCompile(`(?m)] (\w*)`)
 		match := re.FindStringSubmatch(message)
 		return fmt.Sprintf(":green_circle: | `%s` joined the game!", match[1])
 	case "LEAVE":
-		updateDiscordStatus(discordgo.ActivityTypeWatching, "the world burn")
+		commands <- "playerCount"
 		var re = regexp.MustCompile(`(?m)] (\w*)`)
 		match := re.FindStringSubmatch(message)
 		return fmt.Sprintf(":red_circle: | `%s` left the game!", match[1])
@@ -356,6 +356,11 @@ func updatePlayerCount(rconClient *rcon.Client){
 		log.WithFields(logrus.Fields{"err": err}).Panic("Could not parse player count from Factorio")
 		playersOnline = -1
 	}
+	if playersOnline > 0 {
+		updateDiscordStatus(discordgo.ActivityTypeWatching, "the factory grow")
+	} else {
+		updateDiscordStatus(discordgo.ActivityTypeWatching, "the world burn")
+	}
 }
 
 func setUpDiscord() *discordgo.Session {
@@ -399,6 +404,10 @@ func handleCommands(discord *discordgo.Session, rconClient *rcon.Client){
 					msg = "Unknown"
 				}
 				discord.ChannelMessageSend(discordChannelId, msg)
+				break
+			case "playerCount":
+				// This is only triggered in code, never by a message
+				updatePlayerCount(rconClient)
 				break
 		}
 	}
