@@ -258,7 +258,7 @@ func onReceiveDiscordMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	messages := parseDiscordMessage(m.Content)
 	log.WithFields(logrus.Fields{"messages": messages}).Debugf("Sending Discord message to output channel")
 	for _, message := range messages {
-		if message[0:1] == "!" {
+		if len(message) > 0 && message[0:1] == "!" {
 			commands <- message
 		}
 		messagesToFactorio <- fmt.Sprintf("[%s]: %s", nick, message)
