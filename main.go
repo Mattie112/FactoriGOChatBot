@@ -55,7 +55,7 @@ func main() {
 	discord := setUpDiscord()
 	rconClient := setUpRCON()
 
-	//Setup file watchers
+	// Setup file watchers
 	go readFactorioLogFile(os.Getenv("FACTORIO_LOG"))
 	if os.Getenv("MOD_LOG") != "" {
 		go readFactorioLogFile(os.Getenv("MOD_LOG"))
@@ -66,19 +66,28 @@ func main() {
 	go sendMessageToDiscord(discord)
 	go handleCommands(discord, rconClient)
 
+	// Setup recurring tasks
+	periodicTasks := schedule(60 * time.Second, func() {
+		updatePlayerCount(rconClient)
+	})
+
 	// Keep running until getting exit signal
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
 
 	// Cleanup
+	close(periodicTasks)
+	close(messagesToDiscord)
+	close(messagesToFactorio)
+	close(commands)
 	_ = discord.Close()
 }
 
 func loadConfig() sConfig {
-	var c = sConfig{allRocketLaunches: getenvBool("ALL_ROCKET_LAUNCHES")}
-	return c
+	return sConfig{allRocketLaunches: getenvBool("ALL_ROCKET_LAUNCHES")}
 }
+
 
 // Parse the message and format it in a way for Discord
 func parseAndFormatMessage(message string) string {
@@ -318,14 +327,20 @@ func setUpRCON() *rcon.Client {
 	rconPassword := os.Getenv("RCON_PASSWORD")
 	rconClient := rcon.New(rconIp+":"+rconPort, rconPassword, time.Second*2)
 	updatePlayerCount(rconClient)
+	return rconClient
+}
+
+func getSeedFromFactorio(rconClient *rcon.Client) string {
+	if seed != "" {
+		return seed
+	}
 	msg, err := rconClient.Execute("/seed")
 	if err != nil {
 		log.WithFields(logrus.Fields{"err": err}).Error("Could not get seed from Factorio")
-		seed = "Unknown"
-	} else {
-		seed = msg
+		return "Unknown"
 	}
-	return rconClient
+	seed = msg
+	return seed
 }
 
 func updatePlayerCount(rconClient *rcon.Client){
@@ -379,7 +394,7 @@ func handleCommands(discord *discordgo.Session, rconClient *rcon.Client){
 				discord.ChannelMessageSend(discordChannelId, strconv.Itoa(playersOnline) + " players online")
 				break
 			case "!seed":
-				discord.ChannelMessageSend(discordChannelId, seed)
+				discord.ChannelMessageSend(discordChannelId, getSeedFromFactorio(rconClient))
 				break
 			case "!evolution":
 				msg, err := rconClient.Execute("/evolution")

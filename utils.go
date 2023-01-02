@@ -9,6 +9,22 @@ import (
 	"time"
 )
 
+func schedule(delay time.Duration, what func()) chan struct{} {
+	ticker := time.NewTicker(5 * time.Second)
+	quit := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <- ticker.C:
+				what()
+			case <- quit:
+				ticker.Stop()
+				return
+			}
+		}
+	 }()
+	 return quit
+}
 
 func getLoggerFromConfig(logLevel string) *logrus.Logger {
 	logLevel = strings.ToLower(logLevel)
