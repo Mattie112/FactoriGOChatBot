@@ -3,9 +3,10 @@ package main
 import (
 	"fmt"
 	"github.com/bwmarrin/discordgo"
-	"github.com/forPelevin/gomoji"
 	"github.com/forewing/csgo-rcon"
+	"github.com/forPelevin/gomoji"
 	"github.com/joho/godotenv"
+	"github.com/nxadm/tail"
 	"github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
@@ -20,7 +21,6 @@ var (
 	log                *logrus.Logger
 	messagesToDiscord  chan string
 	messagesToFactorio chan string
-	readLogFile        chan string
 	discordActivities  chan discordgo.Activity
 	commands           chan string
 	discordChannelId   string
@@ -50,23 +50,19 @@ func main() {
 
 	messagesToDiscord = make(chan string)
 	messagesToFactorio = make(chan string)
-	readLogFile = make(chan string)
 	commands = make(chan string)
 
 	discord := setUpDiscord()
 	rconClient := setUpRCON()
 
-	//Setup file watcher
-	var paths []string
-	paths = append(paths, os.Getenv("FACTORIO_LOG"))
+	//Setup file watchers
+	go readFactorioLogFile(os.Getenv("FACTORIO_LOG"))
 	if os.Getenv("MOD_LOG") != "" {
-		paths = append(paths, os.Getenv("MOD_LOG"))
+		go readFactorioLogFile(os.Getenv("MOD_LOG"))
 	}
-	watcher := setupFileWatcher(paths)
 
 	// Start functions that handle the dataflow
 	go sendMessageToFactorio(rconClient)
-	go readFactorioLogFile()
 	go sendMessageToDiscord(discord)
 	go handleCommands(discord, rconClient)
 
@@ -77,7 +73,6 @@ func main() {
 
 	// Cleanup
 	_ = discord.Close()
-	_ = watcher.Close()
 }
 
 func loadConfig() sConfig {
@@ -107,7 +102,6 @@ func parseAndFormatMessage(message string) string {
 		if strings.Contains(messageContent, "[gps=") {
 			return ""
 		}
-
 		return fmt.Sprintf(":speech_left: | `%s`: %s", match[1], messageContent)
 	case "JOIN":
 		commands <- "playerCount"
@@ -277,12 +271,20 @@ func parseDiscordMessage(message string) []string {
 }
 
 // Read the last line of a file and puts the parsed message on our output channel
-func readFactorioLogFile() {
-	for fileName := range readLogFile {
-		log.Debug("Trigger to read Factorio logfile")
-		line := getLastLineWithSeek(fileName)
-		log.WithFields(logrus.Fields{"line": line}).Debug("Read line from Factorio log")
-		message := parseAndFormatMessage(line)
+func readFactorioLogFile(filename string) {
+	t, err := tail.TailFile(filename, tail.Config{
+		Follow: true,
+		ReOpen: true,
+		MustExist: true,
+		Poll: os.Getenv("POLL_LOG") != "",
+	})
+	if err != nil {
+		log.WithError(err).Error("Failed to open mod log file")
+		return
+	}
+	for line := range t.Lines {
+		log.WithFields(logrus.Fields{"line": line.Text}).Debug("Read line from Factorio log")
+		message := parseAndFormatMessage(line.Text)
 		if message != "" {
 			messagesToDiscord <- message
 		}
@@ -308,24 +310,6 @@ func sendDiscordStatusUpdates(discord *discordgo.Session) {
 		})
 		log.Debugln("Updated status to " + activityToStatus(&activity))
 	}
-}
-
-func activityToStatus(activity *discordgo.Activity) string{
-	switch(activity.Type){
-		case discordgo.ActivityTypeGame:
-			return "Playing " + activity.Name
-		case discordgo.ActivityTypeStreaming:
-			return "Streaming " + activity.Name
-		case discordgo.ActivityTypeListening:
-			return "Listening to " + activity.Name
-		case discordgo.ActivityTypeWatching:
-			return "Watching " + activity.Name
-		case discordgo.ActivityTypeCustom:
-			return activity.Emoji.Name + " " + activity.Name
-		case discordgo.ActivityTypeCompeting:
-			return "Competing in " + activity.Name
-	}
-	return "Unknown"
 }
 
 func setUpRCON() *rcon.Client {
@@ -421,27 +405,7 @@ func checkRequiredEnvVariables() {
 		}
 	}
 }
-func getenvStr(key string) (string, error) {
-	v := os.Getenv(key)
-	return v, nil
-}
 
-func getenvBool(key string) bool {
-	s, err := getenvStr(key)
-	if err != nil {
-		log.WithField("envVar", key).WithError(err).Error("Cannot parse env variable as boolean")
-		return false
-	}
-	if s == "" {
-		return false // No env var is false
-	}
-	v, err := strconv.ParseBool(s)
-	if err != nil {
-		log.WithField("envVar", key).WithError(err).Error("Cannot parse env variable as boolean")
-		return false
-	}
-	return v
-}
 
 type sConfig struct {
 	allRocketLaunches bool
