@@ -12,6 +12,7 @@ github.com/forPelevin/gomoji v1.1.2/go.mod h1:Z5cUlNvnrRQPxwMxc8hmn+ZAm0p8WhqE0F
 github.com/forewing/csgo-rcon v1.3.0 h1:y1BwWL3mLZeXQkOY1ZGD8cq1jOYBi9UXMrBSafNj+zg=
 github.com/forewing/csgo-rcon v1.3.0/go.mod h1:hD/ht7ta+ub49Jx+FiP3tI7vKRt/bDEc7vrj3/iOrjw=
 github.com/forewing/gobuild v0.4.0/go.mod h1:HRJckNq8s6UAK2r5PsXhFQS+FGk0v5hvO7TmEVrAP5w=
+github.com/fsnotify/fsnotify v1.4.9 h1:hsms1Qyu0jgnwNXIxa+/V/PDsU6CfLf6CNO8H7IWoS4=
 github.com/fsnotify/fsnotify v1.4.9/go.mod h1:znqG4EE+3YCdAaPaxE2ZRY/06pZUdp0tY4IgpuI1SZQ=
 github.com/fsnotify/fsnotify v1.5.1 h1:mZcQUHVQUQWoPXXtuf9yuEXKudkV2sx1E06UadKWpgI=
 github.com/fsnotify/fsnotify v1.5.1/go.mod h1:T3375wBYaZdLLcVNkcVbzGHY7f1l/uK5T5Ai1i3InKU=
