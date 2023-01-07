@@ -35,5 +35,5 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: factoriogo-chat-bot-${{ github.ref_name }}
-          path: factorigo-chat-bot
+          path: FactoriGOChatBot
       - run: echo "🍏 This job's status is ${{ job.status }}."
