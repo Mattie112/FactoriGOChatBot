@@ -2,8 +2,6 @@ name: Go package
 on:
   push:
   pull_requests:
-    branches:
-      - main
 jobs:
   test:
     runs-on: ubuntu-latest
