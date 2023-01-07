@@ -1,5 +1,13 @@
 name: Go package
-on: [ push ]
+on:
+  push:
+    branches:
+      - main
+  pull_requests:
+    types:
+      - opened
+      - edited
+      - closed
 jobs:
   test:
     runs-on: ubuntu-latest
