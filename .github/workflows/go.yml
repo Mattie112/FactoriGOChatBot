@@ -26,4 +26,9 @@ jobs:
         run: go test -v ./...
       - name: Build
         run: go build -v ./...
+      - name: Upload Unix binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: factoriogo-chat-bot-${{ GITHUB_REF_NAME }}
+          path: factorigo-chat-bot
       - run: echo "🍏 This job's status is ${{ job.status }}."
