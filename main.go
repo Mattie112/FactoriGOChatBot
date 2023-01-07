@@ -8,6 +8,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/nxadm/tail"
 	"github.com/sirupsen/logrus"
+	"io"
 	"os"
 	"os/signal"
 	"regexp"
@@ -47,6 +48,7 @@ func main() {
 	config = loadConfig() // Load optional config
 
 	discordChannelId = os.Getenv("DISCORD_CHANNEL_ID")
+	playersOnline = 0
 
 	messagesToDiscord = make(chan string)
 	messagesToFactorio = make(chan string)
@@ -112,12 +114,12 @@ func parseAndFormatMessage(message string) string {
 		}
 		return fmt.Sprintf(":speech_left: | `%s`: %s", match[1], messageContent)
 	case "JOIN":
-		commands <- "playerCount"
+		playersOnline += 1
 		var re = regexp.MustCompile(`(?m)] (\w*)`)
 		match := re.FindStringSubmatch(message)
 		return fmt.Sprintf(":green_circle: | `%s` joined the game!", match[1])
 	case "LEAVE":
-		commands <- "playerCount"
+		playersOnline -= 1
 		var re = regexp.MustCompile(`(?m)] (\w*)`)
 		match := re.FindStringSubmatch(message)
 		return fmt.Sprintf(":red_circle: | `%s` left the game!", match[1])
@@ -280,17 +282,26 @@ func parseDiscordMessage(message string) []string {
 
 // Read the last line of a file and puts the parsed message on our output channel
 func readFactorioLogFile(filename string) {
+	seek := tail.SeekInfo{
+		Offset: 0,
+		Whence: io.SeekEnd,
+	}
 	t, err := tail.TailFile(filename, tail.Config{
 		Follow:    true,
 		ReOpen:    true,
 		MustExist: true,
 		Poll:      os.Getenv("POLL_LOG") != "",
+		Location:  &seek,
 	})
 	if err != nil {
 		log.WithError(err).Error("Failed to open mod log file")
 		return
 	}
 	for line := range t.Lines {
+		if line.Err != nil {
+			log.WithError(line.Err).Error("Error while tailing log file")
+			continue
+		}
 		log.WithFields(logrus.Fields{"line": line.Text}).Debug("Read line from Factorio log")
 		message := parseAndFormatMessage(line.Text)
 		if message != "" {
@@ -346,13 +357,12 @@ func updatePlayerCount(rconClient *rcon.Client) {
 	msg, err := rconClient.Execute("/players online count")
 	if err != nil {
 		log.WithFields(logrus.Fields{"err": err}).Error("Could not get player count from Factorio")
-		playersOnline = -1
 		return
 	}
 	playersOnline, err = strconv.Atoi(strings.Split(strings.Split(msg, "(")[1], ")")[0])
 	if err != nil {
 		log.WithFields(logrus.Fields{"err": err}).Panic("Could not parse player count from Factorio")
-		playersOnline = -1
+		return
 	}
 	if playersOnline > 0 {
 		updateDiscordStatus(discordgo.ActivityTypeWatching, "the factory grow")
@@ -402,10 +412,6 @@ func handleCommands(discord *discordgo.Session, rconClient *rcon.Client) {
 				msg = "Unknown"
 			}
 			discord.ChannelMessageSend(discordChannelId, msg)
-			break
-		case "playerCount":
-			// This is only triggered in code, never by a message
-			updatePlayerCount(rconClient)
 			break
 		}
 	}
