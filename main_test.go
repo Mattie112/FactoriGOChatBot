@@ -1,11 +1,24 @@
 package main
 
 import (
+	"github.com/bwmarrin/discordgo"
 	"reflect"
 	"testing"
 )
 
 func Test_parseAndFormatMessage(t *testing.T) {
+	// Initialize and consume on 2 channels so we don't block on the channel insert (and therefore sleep al goroutines)
+	// There is probaly a better wayo to do this
+	commands = make(chan string)
+	go func() {
+		for range commands {
+		}
+	}()
+	discordActivities = make(chan discordgo.Activity)
+	go func() {
+		for range discordActivities {
+		}
+	}()
 	type args struct {
 		message string
 	}
@@ -58,6 +71,7 @@ func Test_parseAndFormatMessage(t *testing.T) {
 			}
 		})
 	}
+	close(commands)
 }
 
 func Test_parseDiscordMessage(t *testing.T) {

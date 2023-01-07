@@ -4,14 +4,14 @@ go 1.17
 
 require (
 	github.com/bwmarrin/discordgo v0.26.1
+	github.com/forPelevin/gomoji v1.1.2
 	github.com/forewing/csgo-rcon v1.3.0
 	github.com/joho/godotenv v1.4.0
-	github.com/sirupsen/logrus v1.8.1
 	github.com/nxadm/tail v1.4.8
+	github.com/sirupsen/logrus v1.8.1
 )
 
 require (
-	github.com/forPelevin/gomoji v1.1.2 // indirect
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/hpcloud/tail v1.0.0 // indirect

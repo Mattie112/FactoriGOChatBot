@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 	"github.com/bwmarrin/discordgo"
-	"github.com/forewing/csgo-rcon"
 	"github.com/forPelevin/gomoji"
+	"github.com/forewing/csgo-rcon"
 	"github.com/joho/godotenv"
 	"github.com/nxadm/tail"
 	"github.com/sirupsen/logrus"
@@ -67,7 +67,7 @@ func main() {
 	go handleCommands(discord, rconClient)
 
 	// Setup recurring tasks
-	periodicTasks := schedule(60 * time.Second, func() {
+	periodicTasks := schedule(60*time.Second, func() {
 		updatePlayerCount(rconClient)
 	})
 
@@ -87,7 +87,6 @@ func main() {
 func loadConfig() sConfig {
 	return sConfig{allRocketLaunches: getenvBool("ALL_ROCKET_LAUNCHES")}
 }
-
 
 // Parse the message and format it in a way for Discord
 func parseAndFormatMessage(message string) string {
@@ -151,7 +150,7 @@ func parseModLogEntries(message string) string {
 		var re = regexp.MustCompile(`(?m):([\w -]*)+`)
 		match := re.FindAllStringSubmatch(message, -1)
 
-		updateDiscordStatus(discordgo.ActivityTypeStreaming, match[1][1] + " dying")
+		updateDiscordStatus(discordgo.ActivityTypeStreaming, match[1][1]+" dying")
 		// No cause
 		if len(match) == 2 {
 			return fmt.Sprintf(":skull: | Player died: `%s` (unknown cause)", match[1][1])
@@ -282,10 +281,10 @@ func parseDiscordMessage(message string) []string {
 // Read the last line of a file and puts the parsed message on our output channel
 func readFactorioLogFile(filename string) {
 	t, err := tail.TailFile(filename, tail.Config{
-		Follow: true,
-		ReOpen: true,
+		Follow:    true,
+		ReOpen:    true,
 		MustExist: true,
-		Poll: os.Getenv("POLL_LOG") != "",
+		Poll:      os.Getenv("POLL_LOG") != "",
 	})
 	if err != nil {
 		log.WithError(err).Error("Failed to open mod log file")
@@ -313,9 +312,9 @@ func sendDiscordStatusUpdates(discord *discordgo.Session) {
 		var idle int
 		idle = int(0)
 		discord.UpdateStatusComplex(discordgo.UpdateStatusData{
-			IdleSince: &idle,
-			Activities: []*discordgo.Activity{ &activity, },
-			AFK: false,
+			IdleSince:  &idle,
+			Activities: []*discordgo.Activity{&activity},
+			AFK:        false,
 		})
 		log.Debugln("Updated status to " + activityToStatus(&activity))
 	}
@@ -343,7 +342,7 @@ func getSeedFromFactorio(rconClient *rcon.Client) string {
 	return seed
 }
 
-func updatePlayerCount(rconClient *rcon.Client){
+func updatePlayerCount(rconClient *rcon.Client) {
 	msg, err := rconClient.Execute("/players online count")
 	if err != nil {
 		log.WithFields(logrus.Fields{"err": err}).Error("Could not get player count from Factorio")
@@ -387,27 +386,27 @@ func setUpDiscord() *discordgo.Session {
 	return discord
 }
 
-func handleCommands(discord *discordgo.Session, rconClient *rcon.Client){
+func handleCommands(discord *discordgo.Session, rconClient *rcon.Client) {
 	for command := range commands {
-		switch(command){
-			case "!online":
-				discord.ChannelMessageSend(discordChannelId, strconv.Itoa(playersOnline) + " players online")
-				break
-			case "!seed":
-				discord.ChannelMessageSend(discordChannelId, getSeedFromFactorio(rconClient))
-				break
-			case "!evolution":
-				msg, err := rconClient.Execute("/evolution")
-				if err != nil {
-					log.WithFields(logrus.Fields{"err": err}).Error("Could not get evolution from Factorio")
-					msg = "Unknown"
-				}
-				discord.ChannelMessageSend(discordChannelId, msg)
-				break
-			case "playerCount":
-				// This is only triggered in code, never by a message
-				updatePlayerCount(rconClient)
-				break
+		switch command {
+		case "!online":
+			discord.ChannelMessageSend(discordChannelId, strconv.Itoa(playersOnline)+" players online")
+			break
+		case "!seed":
+			discord.ChannelMessageSend(discordChannelId, getSeedFromFactorio(rconClient))
+			break
+		case "!evolution":
+			msg, err := rconClient.Execute("/evolution")
+			if err != nil {
+				log.WithFields(logrus.Fields{"err": err}).Error("Could not get evolution from Factorio")
+				msg = "Unknown"
+			}
+			discord.ChannelMessageSend(discordChannelId, msg)
+			break
+		case "playerCount":
+			// This is only triggered in code, never by a message
+			updatePlayerCount(rconClient)
+			break
 		}
 	}
 }
@@ -420,7 +419,6 @@ func checkRequiredEnvVariables() {
 		}
 	}
 }
-
 
 type sConfig struct {
 	allRocketLaunches bool
