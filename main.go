@@ -66,7 +66,7 @@ func main() {
 	// Start functions that handle the dataflow
 	go sendMessageToFactorio(rconClient)
 	go sendMessageToDiscord(discord)
-	go handleCommands(discord, rconClient)
+	go handleCommands(rconClient)
 
 	// Setup recurring tasks
 	periodicTasks := schedule(60*time.Second, func() {
@@ -320,13 +320,15 @@ func updateDiscordStatus(activityType discordgo.ActivityType, name string) {
 func sendDiscordStatusUpdates(discord *discordgo.Session) {
 	for activity := range discordActivities {
 		// Set game status
-		var idle int
-		idle = int(0)
-		discord.UpdateStatusComplex(discordgo.UpdateStatusData{
+		idle := 0
+		err := discord.UpdateStatusComplex(discordgo.UpdateStatusData{
 			IdleSince:  &idle,
 			Activities: []*discordgo.Activity{&activity},
 			AFK:        false,
 		})
+		if err != nil {
+			log.WithError(err).Errorln("Failed to update Discord status")
+		}
 		log.Debugln("Updated status to " + activityToStatus(&activity))
 	}
 }
@@ -396,14 +398,14 @@ func setUpDiscord() *discordgo.Session {
 	return discord
 }
 
-func handleCommands(discord *discordgo.Session, rconClient *rcon.Client) {
+func handleCommands(rconClient *rcon.Client) {
 	for command := range commands {
 		switch command {
 		case "!online":
-			discord.ChannelMessageSend(discordChannelId, strconv.Itoa(playersOnline)+" players online")
+			messagesToDiscord <- strconv.Itoa(playersOnline) + " players online"
 			break
 		case "!seed":
-			discord.ChannelMessageSend(discordChannelId, getSeedFromFactorio(rconClient))
+			messagesToDiscord <- getSeedFromFactorio(rconClient)
 			break
 		case "!evolution":
 			msg, err := rconClient.Execute("/evolution")
@@ -411,7 +413,7 @@ func handleCommands(discord *discordgo.Session, rconClient *rcon.Client) {
 				log.WithFields(logrus.Fields{"err": err}).Error("Could not get evolution from Factorio")
 				msg = "Unknown"
 			}
-			discord.ChannelMessageSend(discordChannelId, msg)
+			messagesToDiscord <- msg
 			break
 		}
 	}
