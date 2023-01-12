@@ -27,6 +27,7 @@ var (
 	discordChannelId   string
 	playersOnline      int
 	seed               string
+	tailFile           *tail.Tail
 	// VERSION These can be injected at build time -ldflags "-InputArgs main.VERSION=dev main.BUILD_TIME=201610251410"
 	VERSION = "Undefined"
 	// BUILDTIME These can be injected at build time -ldflags "-InputArgs main.VERSION=dev main.BUILD_TIME=201610251410"
@@ -286,7 +287,8 @@ func readFactorioLogFile(filename string) {
 		Offset: 0,
 		Whence: io.SeekEnd,
 	}
-	t, err := tail.TailFile(filename, tail.Config{
+	var err error
+	tailFile, err = tail.TailFile(filename, tail.Config{
 		Follow:    true,
 		ReOpen:    true,
 		MustExist: true,
@@ -297,7 +299,7 @@ func readFactorioLogFile(filename string) {
 		log.WithError(err).Error("Failed to open mod log file")
 		return
 	}
-	for line := range t.Lines {
+	for line := range tailFile.Lines {
 		if line.Err != nil {
 			log.WithError(line.Err).Error("Error while tailing log file")
 			continue

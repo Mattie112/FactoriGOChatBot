@@ -10,20 +10,20 @@ import (
 )
 
 func schedule(delay time.Duration, what func()) chan struct{} {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(delay * time.Second)
 	quit := make(chan struct{})
 	go func() {
 		for {
 			select {
-			case <- ticker.C:
+			case <-ticker.C:
 				what()
-			case <- quit:
+			case <-quit:
 				ticker.Stop()
 				return
 			}
 		}
-	 }()
-	 return quit
+	}()
+	return quit
 }
 
 func getLoggerFromConfig(logLevel string) *logrus.Logger {
@@ -45,7 +45,6 @@ func getLoggerFromConfig(logLevel string) *logrus.Logger {
 	}
 	return log
 }
-
 
 func getenvStr(key string) (string, error) {
 	v := os.Getenv(key)
@@ -69,20 +68,20 @@ func getenvBool(key string) bool {
 	return v
 }
 
-func activityToStatus(activity *discordgo.Activity) string{
-	switch(activity.Type){
-		case discordgo.ActivityTypeGame:
-			return "Playing " + activity.Name
-		case discordgo.ActivityTypeStreaming:
-			return "Streaming " + activity.Name
-		case discordgo.ActivityTypeListening:
-			return "Listening to " + activity.Name
-		case discordgo.ActivityTypeWatching:
-			return "Watching " + activity.Name
-		case discordgo.ActivityTypeCustom:
-			return activity.Emoji.Name + " " + activity.Name
-		case discordgo.ActivityTypeCompeting:
-			return "Competing in " + activity.Name
+func activityToStatus(activity *discordgo.Activity) string {
+	switch activity.Type {
+	case discordgo.ActivityTypeGame:
+		return "Playing " + activity.Name
+	case discordgo.ActivityTypeStreaming:
+		return "Streaming " + activity.Name
+	case discordgo.ActivityTypeListening:
+		return "Listening to " + activity.Name
+	case discordgo.ActivityTypeWatching:
+		return "Watching " + activity.Name
+	case discordgo.ActivityTypeCustom:
+		return activity.Emoji.Name + " " + activity.Name
+	case discordgo.ActivityTypeCompeting:
+		return "Competing in " + activity.Name
 	}
 	return "Unknown"
 }
