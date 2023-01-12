@@ -119,11 +119,11 @@ func Test_readFactorioLogFile(t *testing.T) {
 		_ = os.Remove("test.txt")
 	}()
 
-	// Start the tail process and after one second stop it (so that the program finishes)
+	// Start the tail process and after some time stop it (so that the program finishes)
 	go readFactorioLogFile("test.txt")
 	time.Sleep(100 * time.Millisecond) // Give the tail stuff some time to "activate"
 	go func() {
-		<-time.After(10 * time.Second)
+		<-time.After(100 * time.Millisecond)
 		_ = tailFile.Stop()
 	}()
 
