@@ -6,9 +6,6 @@ on:
   pull_request:
     branches:
       - main
-  pull_request_target:
-    branches:
-      - main
 jobs:
   test_and_build:
     runs-on: ubuntu-latest
