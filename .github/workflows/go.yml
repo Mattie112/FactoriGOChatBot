@@ -9,8 +9,6 @@ on:
 jobs:
   test_and_build:
     runs-on: ubuntu-latest
-    substitutions:
-      _NEW_BRANCH_NAME: ${BRANCH_NAME//\//-}
     steps:
       - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
       - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
@@ -37,3 +35,5 @@ jobs:
           name: factoriogo-chat-bot-$_NEW_BRANCH_NAME
           path: FactoriGOChatBot
       - run: echo "🍏 This job's status is ${{ job.status }}."
+    substitutions:
+      _NEW_BRANCH_NAME: $_TMP_VAR
