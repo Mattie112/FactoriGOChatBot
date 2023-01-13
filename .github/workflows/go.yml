@@ -32,6 +32,6 @@ jobs:
       - name: Upload Unix binary
         uses: actions/upload-artifact@v3
         with:
-          name: factoriogo-chat-bot-${{ GITHUB_BASE_REF }}
+          name: factoriogo-chat-bot-${{ env.GITHUB_BASE_REF }}
           path: FactoriGOChatBot
       - run: echo "🍏 This job's status is ${{ job.status }}."
