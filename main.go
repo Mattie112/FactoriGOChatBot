@@ -153,7 +153,7 @@ func parseModLogEntries(message string) string {
 		var re = regexp.MustCompile(`(?m):([\w -]*)+`)
 		match := re.FindAllStringSubmatch(message, -1)
 
-		updateDiscordStatus(discordgo.ActivityTypeStreaming, match[1][1]+" dying")
+		updateDiscordStatus(discordgo.ActivityTypeWatching, match[1][1]+" dying")
 		// No cause
 		if len(match) == 2 {
 			return fmt.Sprintf(":skull: | Player died: `%s` (unknown cause)", match[1][1])
