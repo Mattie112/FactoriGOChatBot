@@ -6,7 +6,9 @@ import (
 	"github.com/forPelevin/gomoji"
 	"github.com/forewing/csgo-rcon"
 	"github.com/joho/godotenv"
+	"github.com/nxadm/tail"
 	"github.com/sirupsen/logrus"
+	"io"
 	"os"
 	"os/signal"
 	"regexp"
@@ -20,8 +22,12 @@ var (
 	log                *logrus.Logger
 	messagesToDiscord  chan string
 	messagesToFactorio chan string
-	readLogFile        chan string
+	discordActivities  chan discordgo.Activity
+	commands           chan string
 	discordChannelId   string
+	playersOnline      int
+	seed               string
+	tailFile           *tail.Tail
 	// VERSION These can be injected at build time -ldflags "-InputArgs main.VERSION=dev main.BUILD_TIME=201610251410"
 	VERSION = "Undefined"
 	// BUILDTIME These can be injected at build time -ldflags "-InputArgs main.VERSION=dev main.BUILD_TIME=201610251410"
@@ -43,26 +49,30 @@ func main() {
 	config = loadConfig() // Load optional config
 
 	discordChannelId = os.Getenv("DISCORD_CHANNEL_ID")
+	playersOnline = 0
 
 	messagesToDiscord = make(chan string)
 	messagesToFactorio = make(chan string)
-	readLogFile = make(chan string)
+	commands = make(chan string)
 
 	discord := setUpDiscord()
 	rconClient := setUpRCON()
 
-	//Setup file watcher
-	var paths []string
-	paths = append(paths, os.Getenv("FACTORIO_LOG"))
+	// Setup file watchers
+	go readFactorioLogFile(os.Getenv("FACTORIO_LOG"))
 	if os.Getenv("MOD_LOG") != "" {
-		paths = append(paths, os.Getenv("MOD_LOG"))
+		go readFactorioLogFile(os.Getenv("MOD_LOG"))
 	}
-	watcher := setupFileWatcher(paths)
 
 	// Start functions that handle the dataflow
 	go sendMessageToFactorio(rconClient)
-	go readFactorioLogFile()
 	go sendMessageToDiscord(discord)
+	go handleCommands(rconClient)
+
+	// Setup recurring tasks
+	periodicTasks := schedule(60*time.Second, func() {
+		updatePlayerCount(rconClient)
+	})
 
 	// Keep running until getting exit signal
 	sc := make(chan os.Signal, 1)
@@ -70,13 +80,15 @@ func main() {
 	<-sc
 
 	// Cleanup
+	close(periodicTasks)
+	close(messagesToDiscord)
+	close(messagesToFactorio)
+	close(commands)
 	_ = discord.Close()
-	_ = watcher.Close()
 }
 
 func loadConfig() sConfig {
-	var c = sConfig{allRocketLaunches: getenvBool("ALL_ROCKET_LAUNCHES")}
-	return c
+	return sConfig{allRocketLaunches: getenvBool("ALL_ROCKET_LAUNCHES")}
 }
 
 // Parse the message and format it in a way for Discord
@@ -101,13 +113,14 @@ func parseAndFormatMessage(message string) string {
 		if strings.Contains(messageContent, "[gps=") {
 			return ""
 		}
-
 		return fmt.Sprintf(":speech_left: | `%s`: %s", match[1], messageContent)
 	case "JOIN":
+		playersOnline += 1
 		var re = regexp.MustCompile(`(?m)] (\w*)`)
 		match := re.FindStringSubmatch(message)
 		return fmt.Sprintf(":green_circle: | `%s` joined the game!", match[1])
 	case "LEAVE":
+		playersOnline -= 1
 		var re = regexp.MustCompile(`(?m)] (\w*)`)
 		match := re.FindStringSubmatch(message)
 		return fmt.Sprintf(":red_circle: | `%s` left the game!", match[1])
@@ -134,11 +147,13 @@ func parseModLogEntries(message string) string {
 	case "RESEARCH_FINISHED":
 		var re = regexp.MustCompile(`(?m):(\S*)]`)
 		match := re.FindStringSubmatch(message)
+		updateDiscordStatus(discordgo.ActivityTypeListening, match[1])
 		return fmt.Sprintf(":microscope: | Research finished: `%s`", match[1])
 	case "PLAYER_DIED":
 		var re = regexp.MustCompile(`(?m):([\w -]*)+`)
 		match := re.FindAllStringSubmatch(message, -1)
 
+		updateDiscordStatus(discordgo.ActivityTypeWatching, match[1][1]+" dying")
 		// No cause
 		if len(match) == 2 {
 			return fmt.Sprintf(":skull: | Player died: `%s` (unknown cause)", match[1][1])
@@ -171,6 +186,7 @@ func parseModLogEntries(message string) string {
 
 		return ""
 	case "ROCKET_LAUNCHED":
+		updateDiscordStatus(discordgo.ActivityTypeWatching, "a rocket launch")
 		var re = regexp.MustCompile(`(?m):(\d*)]`)
 		match := re.FindStringSubmatch(message)
 		launchAmount, _ := strconv.Atoi(match[1])
@@ -247,6 +263,9 @@ func onReceiveDiscordMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	messages := parseDiscordMessage(m.Content)
 	log.WithFields(logrus.Fields{"messages": messages}).Debugf("Sending Discord message to output channel")
 	for _, message := range messages {
+		if len(message) > 0 && message[0:1] == "!" {
+			commands <- message
+		}
 		messagesToFactorio <- fmt.Sprintf("[%s]: %s", nick, message)
 	}
 }
@@ -263,15 +282,56 @@ func parseDiscordMessage(message string) []string {
 }
 
 // Read the last line of a file and puts the parsed message on our output channel
-func readFactorioLogFile() {
-	for fileName := range readLogFile {
-		log.Debug("Trigger to read Factorio logfile")
-		line := getLastLineWithSeek(fileName)
-		log.WithFields(logrus.Fields{"line": line}).Debug("Read line from Factorio log")
-		message := parseAndFormatMessage(line)
+func readFactorioLogFile(filename string) {
+	seek := tail.SeekInfo{
+		Offset: 0,
+		Whence: io.SeekEnd,
+	}
+	var err error
+	tailFile, err = tail.TailFile(filename, tail.Config{
+		Follow:    true,
+		ReOpen:    true,
+		MustExist: true,
+		Poll:      os.Getenv("POLL_LOG") != "",
+		Location:  &seek,
+	})
+	if err != nil {
+		log.WithError(err).Error("Failed to open mod log file")
+		return
+	}
+	for line := range tailFile.Lines {
+		if line.Err != nil {
+			log.WithError(line.Err).Error("Error while tailing log file")
+			continue
+		}
+		log.WithFields(logrus.Fields{"line": line.Text}).Debug("Read line from Factorio log")
+		message := parseAndFormatMessage(line.Text)
 		if message != "" {
 			messagesToDiscord <- message
 		}
+	}
+}
+
+func updateDiscordStatus(activityType discordgo.ActivityType, name string) {
+	discordActivities <- discordgo.Activity{
+		Name: name,
+		Type: activityType,
+	}
+}
+
+func sendDiscordStatusUpdates(discord *discordgo.Session) {
+	for activity := range discordActivities {
+		// Set game status
+		idle := 0
+		err := discord.UpdateStatusComplex(discordgo.UpdateStatusData{
+			IdleSince:  &idle,
+			Activities: []*discordgo.Activity{&activity},
+			AFK:        false,
+		})
+		if err != nil {
+			log.WithError(err).Errorln("Failed to update Discord status")
+		}
+		log.Debugln("Updated status to " + activityToStatus(&activity))
 	}
 }
 
@@ -280,7 +340,39 @@ func setUpRCON() *rcon.Client {
 	rconPort := os.Getenv("RCON_PORT")
 	rconPassword := os.Getenv("RCON_PASSWORD")
 	rconClient := rcon.New(rconIp+":"+rconPort, rconPassword, time.Second*2)
+	updatePlayerCount(rconClient)
 	return rconClient
+}
+
+func getSeedFromFactorio(rconClient *rcon.Client) string {
+	if seed != "" {
+		return seed
+	}
+	msg, err := rconClient.Execute("/seed")
+	if err != nil {
+		log.WithFields(logrus.Fields{"err": err}).Error("Could not get seed from Factorio")
+		return "Unknown"
+	}
+	seed = msg
+	return seed
+}
+
+func updatePlayerCount(rconClient *rcon.Client) {
+	msg, err := rconClient.Execute("/players online count")
+	if err != nil {
+		log.WithFields(logrus.Fields{"err": err}).Error("Could not get player count from Factorio")
+		return
+	}
+	playersOnline, err = strconv.Atoi(strings.Split(strings.Split(msg, "(")[1], ")")[0])
+	if err != nil {
+		log.WithFields(logrus.Fields{"err": err}).Panic("Could not parse player count from Factorio")
+		return
+	}
+	if playersOnline > 0 {
+		updateDiscordStatus(discordgo.ActivityTypeWatching, "the factory grow")
+	} else {
+		updateDiscordStatus(discordgo.ActivityTypeWatching, "the world burn")
+	}
 }
 
 func setUpDiscord() *discordgo.Session {
@@ -301,7 +393,32 @@ func setUpDiscord() *discordgo.Session {
 	}
 
 	log.Infoln("Bot registered by Discord and is now listening for messagesToDiscord")
+	discordActivities = make(chan discordgo.Activity)
+	go sendDiscordStatusUpdates(discord)
+	// Set initial status
+	updateDiscordStatus(discordgo.ActivityTypeWatching, "the world burn")
 	return discord
+}
+
+func handleCommands(rconClient *rcon.Client) {
+	for command := range commands {
+		switch command {
+		case "!online":
+			messagesToDiscord <- strconv.Itoa(playersOnline) + " players online"
+			break
+		case "!seed":
+			messagesToDiscord <- getSeedFromFactorio(rconClient)
+			break
+		case "!evolution":
+			msg, err := rconClient.Execute("/evolution")
+			if err != nil {
+				log.WithFields(logrus.Fields{"err": err}).Error("Could not get evolution from Factorio")
+				msg = "Unknown"
+			}
+			messagesToDiscord <- msg
+			break
+		}
+	}
 }
 
 func checkRequiredEnvVariables() {
@@ -311,27 +428,6 @@ func checkRequiredEnvVariables() {
 			log.WithField("envVar", envVar).Fatal("Could not find required ENV VAR")
 		}
 	}
-}
-func getenvStr(key string) (string, error) {
-	v := os.Getenv(key)
-	return v, nil
-}
-
-func getenvBool(key string) bool {
-	s, err := getenvStr(key)
-	if err != nil {
-		log.WithField("envVar", key).WithError(err).Error("Cannot parse env variable as boolean")
-		return false
-	}
-	if s == "" {
-		return false // No env var is false
-	}
-	v, err := strconv.ParseBool(s)
-	if err != nil {
-		log.WithField("envVar", key).WithError(err).Error("Cannot parse env variable as boolean")
-		return false
-	}
-	return v
 }
 
 type sConfig struct {

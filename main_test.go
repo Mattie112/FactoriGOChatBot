@@ -1,11 +1,28 @@
 package main
 
 import (
+	"github.com/bwmarrin/discordgo"
+	"github.com/sirupsen/logrus"
+	"io"
+	"os"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func Test_parseAndFormatMessage(t *testing.T) {
+	// Initialize and consume on 2 channels so we don't block on the channel insert (and therefore sleep al goroutines)
+	// There is probaly a better wayo to do this
+	commands = make(chan string)
+	go func() {
+		for range commands {
+		}
+	}()
+	discordActivities = make(chan discordgo.Activity)
+	go func() {
+		for range discordActivities {
+		}
+	}()
 	type args struct {
 		message string
 	}
@@ -58,6 +75,7 @@ func Test_parseAndFormatMessage(t *testing.T) {
 			}
 		})
 	}
+	close(commands)
 }
 
 func Test_parseDiscordMessage(t *testing.T) {
@@ -83,4 +101,48 @@ func Test_parseDiscordMessage(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_readFactorioLogFile(t *testing.T) {
+	log = logrus.New()
+	log.Out = io.Discard
+	// Prepare channel (readFactorioLogFile will publish to this one)
+	messagesToDiscord = make(chan string, 10)
+
+	// First write a file with some lines so that we have a baseline
+	d1 := []byte("this\nis\na\n\test\n")
+	err := os.WriteFile("test.txt", d1, 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = os.Remove("test.txt")
+	}()
+
+	// Start the tail process and after some time stop it (so that the program finishes)
+	go readFactorioLogFile("test.txt")
+	time.Sleep(100 * time.Millisecond) // Give the tail stuff some time to "activate"
+	go func() {
+		<-time.After(100 * time.Millisecond)
+		_ = tailFile.Stop()
+	}()
+
+	// Write / append something (e.g. a new line written by factorio)
+	f, err := os.OpenFile("test.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	if err != nil {
+		panic(err)
+	}
+
+	write := "2022-02-01 15:31:30 [CHAT] Mattie: Some chat message"
+	want := ":speech_left: | `Mattie`: Some chat message"
+	if _, err = f.WriteString(write); err != nil {
+		panic(err)
+	}
+	_ = f.Close()
+
+	str := <-messagesToDiscord
+	if got := str; !reflect.DeepEqual(got, want) {
+		t.Errorf("readFactorioLogFile() = '%v', want '%v'", got, want)
+	}
+	close(messagesToDiscord)
 }
