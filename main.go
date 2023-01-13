@@ -186,7 +186,7 @@ func parseModLogEntries(message string) string {
 
 		return ""
 	case "ROCKET_LAUNCHED":
-		updateDiscordStatus(discordgo.ActivityTypeStreaming, "a rocket launch")
+		updateDiscordStatus(discordgo.ActivityTypeWatching, "a rocket launch")
 		var re = regexp.MustCompile(`(?m):(\d*)]`)
 		match := re.FindStringSubmatch(message)
 		launchAmount, _ := strconv.Atoi(match[1])
