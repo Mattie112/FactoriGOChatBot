@@ -3,7 +3,7 @@ module github.com/Mattie112/FactoriGOChatBot
 go 1.17
 
 require (
-	github.com/bwmarrin/discordgo v0.26.1
+	github.com/bwmarrin/discordgo v0.27.0
 	github.com/forPelevin/gomoji v1.1.8
 	github.com/forewing/csgo-rcon v1.3.0
 	github.com/joho/godotenv v1.4.0
