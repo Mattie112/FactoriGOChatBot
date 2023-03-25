@@ -27,11 +27,18 @@ jobs:
           cache: true
       - name: Test
         run: go test -v ./...
-      - name: Build
-        run: go build -v ./...
+      - name: Build Linux
+        run: GOOS=linux GARCH=amd64 CGO_ENABLED=0 go build -v -o bin/factorigo-chat-bot
+      - name: Build Windows
+        run: GOOS=windows GARCH=amd64 CGO_ENABLED=0 go build -v -o bin/factorigo-chat-bot.exe
       - name: Upload Unix binary
         uses: actions/upload-artifact@v3
         with:
           name: factoriogo-chat-bot
-          path: FactoriGOChatBot
+          path: ./bin/factorigo-chat-bot
+      - name: Upload Windows binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: factoriogo-chat-bot.exe
+          path: ./bin/factorigo-chat-bot.exe
       - run: echo "🍏 This job's status is ${{ job.status }}."

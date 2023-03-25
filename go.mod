@@ -6,7 +6,7 @@ require (
 	github.com/bwmarrin/discordgo v0.27.1
 	github.com/forPelevin/gomoji v1.1.8
 	github.com/forewing/csgo-rcon v1.3.0
-	github.com/joho/godotenv v1.4.0
+	github.com/joho/godotenv v1.5.1
 	github.com/nxadm/tail v1.4.8
 	github.com/sirupsen/logrus v1.9.0
 )
