@@ -28,9 +28,9 @@ jobs:
       - name: Test
         run: go test -v ./...
       - name: Build Linux
-        run: go build -v GOOS=linux GARCH=amd64 CGO_ENABLED=0 go build ./... -o ./bin/factorigo-chat-bot
+        run: GOOS=linux GARCH=amd64 CGO_ENABLED=0 go build -v ./... -o ./bin/factorigo-chat-bot
       - name: Build Windows
-        run: GOOS=windows GARCH=amd64 CGO_ENABLED=0 go build ./... -o ./bin/factorigo-chat-bot.exe
+        run: GOOS=windows GARCH=amd64 CGO_ENABLED=0 go build -v ./... -o ./bin/factorigo-chat-bot.exe
       - name: Upload Unix binary
         uses: actions/upload-artifact@v3
         with:
