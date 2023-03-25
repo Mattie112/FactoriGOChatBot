@@ -12,8 +12,8 @@ import (
 )
 
 func Test_parseAndFormatMessage(t *testing.T) {
-	// Initialize and consume on 2 channels so we don't block on the channel insert (and therefore sleep al goroutines)
-	// There is probaly a better wayo to do this
+	// Initialize and consume on 2 channels, so we don't block on the channel insert (and therefore sleep al goroutines)
+	// There is probaly a better way to do this
 	commands = make(chan string)
 	go func() {
 		for range commands {
@@ -28,6 +28,7 @@ func Test_parseAndFormatMessage(t *testing.T) {
 		message string
 		config  sConfig
 	}
+	config = botConfig{sendJoinLeave: true}
 	tests := []struct {
 		name string
 		args args
@@ -107,6 +108,7 @@ func Test_parseDiscordMessage(t *testing.T) {
 	}
 }
 
+// This is more of an integration test, it actually creates a file, there is probably a better way
 func Test_readFactorioLogFile(t *testing.T) {
 	log = logrus.New()
 	log.Out = io.Discard
@@ -190,4 +192,41 @@ func Test_sendMessageToFactorio(t *testing.T) {
 			close(messagesToFactorio)
 		})
 	}
+}
+
+func Test_noJoinLeave(t *testing.T) {
+	// Initialize and consume on 2 channels, so we don't block on the channel insert (and therefore sleep al goroutines)
+	// There is probaly a better way to do this
+	commands = make(chan string)
+	go func() {
+		for range commands {
+		}
+	}()
+	discordActivities = make(chan discordgo.Activity)
+	go func() {
+		for range discordActivities {
+		}
+	}()
+	type args struct {
+		message string
+	}
+	// Disable joinLeave messages
+	config = botConfig{sendJoinLeave: false}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{"JOIN", args{message: "2022-02-01 15:31:19 [JOIN] Mattie joined the game"}, ""},
+		{"LEAVE", args{message: "2022-02-01 15:31:30 [LEAVE] Mattie left the game"}, ""},
+		{"CHAT", args{message: "2022-02-01 15:31:30 [CHAT] Mattie: Some chat message"}, ":speech_left: | `Mattie`: Some chat message"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := parseAndFormatMessage(tt.args.message); got != tt.want {
+				t.Errorf("parseAndFormatMessage() = '%v', want '%v'", got, tt.want)
+			}
+		})
+	}
+	close(commands)
 }

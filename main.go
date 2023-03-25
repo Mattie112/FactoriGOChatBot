@@ -9,6 +9,7 @@ import (
 	"github.com/nxadm/tail"
 	"github.com/sirupsen/logrus"
 	"io"
+	"net"
 	"os"
 	"os/signal"
 	"regexp"
@@ -24,7 +25,6 @@ var (
 	messagesToFactorio chan string
 	discordActivities  chan discordgo.Activity
 	commands           chan string
-	discordChannelId   string
 	playersOnline      int
 	seed               string
 	tailFile           *tail.Tail
@@ -32,7 +32,7 @@ var (
 	VERSION = "Undefined"
 	// BUILDTIME These can be injected at build time -ldflags "-InputArgs main.VERSION=dev main.BUILD_TIME=201610251410"
 	BUILDTIME = "Undefined"
-	config    sConfig
+	config    botConfig
 )
 
 func main() {
@@ -43,12 +43,11 @@ func main() {
 		}
 	}
 
-	log = getLoggerFromConfig(os.Getenv("LOG_LEVEL"))
+	log = getLoggerFromConfig(os.Getenv("LOG_LEVEL")) // I want the logger to be up before the config is loaded, so I cannot use the config struct here
 	log.Infof("Starting FactoriGO Chat Bot %s - %s", VERSION, BUILDTIME)
 	checkRequiredEnvVariables()
 	config = loadConfig() // Load optional config
 
-	discordChannelId = os.Getenv("DISCORD_CHANNEL_ID")
 	playersOnline = 0
 
 	messagesToDiscord = make(chan string)
@@ -59,9 +58,9 @@ func main() {
 	rconClient := setUpRCON()
 
 	// Setup file watchers
-	go readFactorioLogFile(os.Getenv("FACTORIO_LOG"))
-	if os.Getenv("MOD_LOG") != "" {
-		go readFactorioLogFile(os.Getenv("MOD_LOG"))
+	go readFactorioLogFile(config.factorioLog)
+	if config.modLog != "" {
+		go readFactorioLogFile(config.modLog)
 	}
 
 	// Start functions that handle the dataflow
@@ -87,11 +86,29 @@ func main() {
 	_ = discord.Close()
 }
 
-func loadConfig() sConfig {
-	return sConfig{
-		allRocketLaunches: getenvBool("ALL_ROCKET_LAUNCHES"),
-		achievementMode:   getenvBool("ACHIEVEMENT_MODE"),
+func loadConfig() botConfig {
+	ip, err := getEnvIp("RCON_IP")
+	if err != nil {
+		log.WithError(err).Error("Cannot load Config")
+	}
+	rconPort, err := getEnvInt("RCON_PORT")
+	if err != nil {
+		log.WithError(err).Error("Cannot load Config")
+	}
+	return botConfig{
+		logLevel:          os.Getenv("LOG_LEVEL"),
+		discordToken:      os.Getenv("DISCORD_TOKEN"),
+		discordChannelId:  os.Getenv("DISCORD_CHANNEL_ID"),
+		rconIp:            ip,
+		rconPort:          rconPort,
+		rconPassword:      os.Getenv("RCON_PASSWORD"),
+		factorioLog:       os.Getenv("FACTORIO_LOG"),
+		modLog:            os.Getenv("MOD_LOG"),
+		pollLog:           getEnvBool(os.Getenv("POLL_LOG")),
+		allRocketLaunches: getEnvBool("ALL_ROCKET_LAUNCHES"),
+		achievementMode:   getEnvBool("ACHIEVEMENT_MODE"),
 		sendGPSPing:       getenvBool("SEND_GPS_PING"),
+		sendJoinLeave:     getEnvBool("SEND_JOIN_LEAVE"),
 	}
 }
 
@@ -123,11 +140,17 @@ func parseAndFormatMessage(message string) string {
 		return fmt.Sprintf(":speech_left: | `%s`: %s", match[1], messageContent)
 	case "JOIN":
 		playersOnline += 1
+		if !config.sendJoinLeave {
+			return ""
+		}
 		var re = regexp.MustCompile(`(?m)] (\w*)`)
 		match := re.FindStringSubmatch(message)
 		return fmt.Sprintf(":green_circle: | `%s` joined the game!", match[1])
 	case "LEAVE":
 		playersOnline -= 1
+		if !config.sendJoinLeave {
+			return ""
+		}
 		var re = regexp.MustCompile(`(?m)] (\w*)`)
 		match := re.FindStringSubmatch(message)
 		return fmt.Sprintf(":red_circle: | `%s` left the game!", match[1])
@@ -219,7 +242,7 @@ func parseModLogEntries(message string) string {
 
 func sendMessageToDiscord(discord *discordgo.Session) {
 	for message := range messagesToDiscord {
-		_, err := discord.ChannelMessageSend(discordChannelId, message)
+		_, err := discord.ChannelMessageSend(config.discordChannelId, message)
 		if err != nil {
 			log.WithError(err).WithFields(logrus.Fields{"message": message}).Error("Failed to post message to Discord")
 		}
@@ -251,7 +274,7 @@ func onReceiveDiscordMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	// Only listen on our Factorio channel
-	if m.ChannelID != discordChannelId {
+	if m.ChannelID != config.discordChannelId {
 		return
 	}
 
@@ -304,7 +327,7 @@ func readFactorioLogFile(filename string) {
 		Follow:    true,
 		ReOpen:    true,
 		MustExist: true,
-		Poll:      os.Getenv("POLL_LOG") != "",
+		Poll:      config.pollLog,
 		Location:  &seek,
 	})
 	if err != nil {
@@ -348,10 +371,7 @@ func sendDiscordStatusUpdates(discord *discordgo.Session) {
 }
 
 func setUpRCON() *rcon.Client {
-	rconIp := os.Getenv("RCON_IP")
-	rconPort := os.Getenv("RCON_PORT")
-	rconPassword := os.Getenv("RCON_PASSWORD")
-	rconClient := rcon.New(rconIp+":"+rconPort, rconPassword, time.Second*2)
+	rconClient := rcon.New(fmt.Sprintf("%s:%d", config.rconIp.String(), config.rconPort), config.rconPassword, time.Second*2)
 	updatePlayerCount(rconClient)
 	return rconClient
 }
@@ -388,7 +408,7 @@ func updatePlayerCount(rconClient *rcon.Client) {
 }
 
 func setUpDiscord() *discordgo.Session {
-	discordToken := os.Getenv("DISCORD_TOKEN")
+	discordToken := config.discordToken
 
 	discord, err := discordgo.New("Bot " + discordToken)
 	if err != nil {
@@ -443,10 +463,21 @@ func checkRequiredEnvVariables() {
 	}
 }
 
-type sConfig struct {
+// See Readme for possible settings
+type botConfig struct {
+	logLevel          string
+	discordToken      string
+	discordChannelId  string
+	rconIp            net.IP
+	rconPort          int
+	rconPassword      string
+	factorioLog       string
+	modLog            string
+	pollLog           bool
 	allRocketLaunches bool
 	achievementMode   bool
 	sendGPSPing       bool
+	sendJoinLeave     bool
 }
 
 type RconClient interface {

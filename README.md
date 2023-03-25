@@ -59,12 +59,13 @@ Here is a list of all variables available:
 LOG_LEVEL=info (optional) # This is the log level, when submitting a bug please set this to debug
 DISCORD_TOKEN=xx # The Discord Authentication token for your bot
 DISCORD_CHANNEL_ID=xx # The Discord channel ID 
+DISCORD_SEND_JOIN_LEAVE=true # Set to false if you don't want join/leave events to be send to Discord
 RCON_IP=xx # The IP of your Factorio server
 RCON_PORT=xx # The rcon port
 RCON_PASSWORD=xx # The rcon password
 FACTORIO_LOG=C:\Users\xx\AppData\Roaming\Factorio\console.log (Unix path also supported) # Path to the chat log (--console-log)
 MOD_LOG=C:\Users\xx\AppData\Roaming\Factorio\script-output\factorigo-chat-bot\factorigo-chat-bot.log (Optional) # If you use the companion mod supply the path to that log file here
-POLL_LOG=true # If this is set, logs will be polled instead of using inotify. This may be required with docker depending on your storage setup
+POLL_LOG=false # If this is set, logs will be polled instead of using inotify. This may be required with docker depending on your storage setup
 ALL_ROCKET_LAUNCHES=false # By default it will say only some rocket launches (1, 10, 100 etc). If you want to see all set this to true
 ACHIEVEMENT_MODE=true # For nicer text-layout (and possible some special commands in the future), we need to execute commands. THIS WILL DISABLE ACHIEVEMENTS.
 SEND_GPS_PING=false # If this is set, the bot will send all GPS/Location pings to Discord
