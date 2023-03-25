@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"github.com/bwmarrin/discordgo"
 	"github.com/sirupsen/logrus"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -46,13 +48,13 @@ func getLoggerFromConfig(logLevel string) *logrus.Logger {
 	return log
 }
 
-func getenvStr(key string) (string, error) {
+func getEnvStr(key string) (string, error) {
 	v := os.Getenv(key)
 	return v, nil
 }
 
-func getenvBool(key string) bool {
-	s, err := getenvStr(key)
+func getEnvBool(key string) bool {
+	s, err := getEnvStr(key)
 	if err != nil {
 		log.WithField("envVar", key).WithError(err).Error("Cannot parse env variable as boolean")
 		return false
@@ -66,6 +68,22 @@ func getenvBool(key string) bool {
 		return false
 	}
 	return v
+}
+
+func getEnvIp(key string) (net.IP, error) {
+	v := os.Getenv(key)
+	ip := net.ParseIP(v)
+	if ip == nil {
+		err := errors.New("cannot parse string as IP")
+		return nil, err
+	}
+	return ip, nil
+}
+
+func getEnvInt(key string) (int, error) {
+	v := os.Getenv(key)
+	i, err := strconv.Atoi(v)
+	return i, err
 }
 
 func activityToStatus(activity *discordgo.Activity) string {
