@@ -62,6 +62,4 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-
-
       - run: echo "🍏 This job's status is ${{ job.status }}."
