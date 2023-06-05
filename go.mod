@@ -8,7 +8,7 @@ require (
 	github.com/forewing/csgo-rcon v1.3.0
 	github.com/joho/godotenv v1.5.1
 	github.com/nxadm/tail v1.4.8
-	github.com/sirupsen/logrus v1.9.0
+	github.com/sirupsen/logrus v1.9.3
 )
 
 require (
