@@ -107,7 +107,7 @@ func loadConfig() botConfig {
 		pollLog:           getEnvBool(os.Getenv("POLL_LOG")),
 		allRocketLaunches: getEnvBool("ALL_ROCKET_LAUNCHES"),
 		achievementMode:   getEnvBool("ACHIEVEMENT_MODE"),
-		sendGPSPing:       getenvBool("SEND_GPS_PING"),
+		sendGPSPing:       getEnvBool("SEND_GPS_PING"),
 		sendJoinLeave:     getEnvBool("SEND_JOIN_LEAVE"),
 	}
 }
