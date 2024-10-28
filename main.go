@@ -389,6 +389,7 @@ func setUpDiscord() *discordgo.Session {
 	discord, err := discordgo.New("Bot " + discordToken)
 	if err != nil {
 		log.WithFields(logrus.Fields{"err": err, "token": discordToken}).Panic("Could register bot with Discord")
+		return nil
 	}
 
 	// Listen to incoming messagesToDiscord from Discord
