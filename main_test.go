@@ -26,6 +26,7 @@ func Test_parseAndFormatMessage(t *testing.T) {
 	}()
 	type args struct {
 		message string
+		config  sConfig
 	}
 	tests := []struct {
 		name string
@@ -67,10 +68,12 @@ func Test_parseAndFormatMessage(t *testing.T) {
 		// Corrupted messages (as I don't know yet how to fix the file read, so it will have a single line guaranteed
 		{"CORRUPT", args{message: "[FactoriGOChatBot]: \"2852569 [foobar]\""}, ""},
 		// Messages I want to ignore
-		{"GPS", args{message: "2022-04-14 19:41:54 [CHAT] Mattie: [gps=98,69]"}, ""},
+		{"GPS-hide", args{message: "2022-04-14 19:41:54 [CHAT] Mattie: [gps=98,69]"}, ""},
+		{"GPS-show", args{message: "2022-04-14 19:41:54 [CHAT] Mattie: [gps=98,69]", config: sConfig{sendGPSPing: true}}, ":map: | `Mattie`: [gps=98,69]"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			config = tt.args.config
 			if got := parseAndFormatMessage(tt.args.message); got != tt.want {
 				t.Errorf("parseAndFormatMessage() = '%v', want '%v'", got, tt.want)
 			}

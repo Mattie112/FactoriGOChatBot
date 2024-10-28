@@ -91,6 +91,7 @@ func loadConfig() sConfig {
 	return sConfig{
 		allRocketLaunches: getenvBool("ALL_ROCKET_LAUNCHES"),
 		achievementMode:   getenvBool("ACHIEVEMENT_MODE"),
+		sendGPSPing:       getenvBool("SEND_GPS_PING"),
 	}
 }
 
@@ -114,6 +115,9 @@ func parseAndFormatMessage(message string) string {
 		// Ignore GPS (= map pings)
 		messageContent := match[2]
 		if strings.Contains(messageContent, "[gps=") {
+			if config.sendGPSPing {
+				return fmt.Sprintf(":map: | `%s`: %s", match[1], messageContent)
+			}
 			return ""
 		}
 		return fmt.Sprintf(":speech_left: | `%s`: %s", match[1], messageContent)
@@ -442,6 +446,7 @@ func checkRequiredEnvVariables() {
 type sConfig struct {
 	allRocketLaunches bool
 	achievementMode   bool
+	sendGPSPing       bool
 }
 
 type RconClient interface {
