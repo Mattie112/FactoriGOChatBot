@@ -66,7 +66,7 @@ FACTORIO_LOG=C:\Users\xx\AppData\Roaming\Factorio\console.log (Unix path also su
 MOD_LOG=C:\Users\xx\AppData\Roaming\Factorio\script-output\factorigo-chat-bot\factorigo-chat-bot.log (Optional) # If you use the companion mod supply the path to that log file here
 POLL_LOG=1 # If this is set, logs will be polled instead of using inotify. This may be required with docker depending on your storage setup
 ALL_ROCKET_LAUNCHES=false # By default it will say only some rocket launches (1, 10, 100 etc). If you want to see all set this to true
-ACHIEVEMENT_MODE=false # For nicer text-layout and commands like !seed / !evolution to work, we need to execute commands. THIS WILL DISABLE ACHIEVEMENTS. If you care for achievements turn this on!
+ACHIEVEMENT_MODE=true # For nicer text-layout (and possible some special commands in the future), we need to execute commands. THIS WILL DISABLE ACHIEVEMENTS.
 ```
 When using docker: don't forget to also mount/bind the log-files to your container.  
 
