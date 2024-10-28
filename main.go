@@ -222,7 +222,7 @@ func sendMessageToDiscord(discord *discordgo.Session) {
 	}
 }
 
-func sendMessageToFactorio(rconClient *rcon.Client) {
+func sendMessageToFactorio(rconClient RconClient) {
 	log.Debugf("Setting up message handler")
 	for message := range messagesToFactorio {
 		message = strings.Replace(message, "'", "\\'", -1)
@@ -441,4 +441,8 @@ func checkRequiredEnvVariables() {
 type sConfig struct {
 	allRocketLaunches bool
 	achievementMode   bool
+}
+
+type RconClient interface {
+	Execute(command string) (string, error)
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/mock"
 	"io"
 	"os"
 	"reflect"
@@ -145,4 +146,45 @@ func Test_readFactorioLogFile(t *testing.T) {
 		t.Errorf("readFactorioLogFile() = '%v', want '%v'", got, want)
 	}
 	close(messagesToDiscord)
+}
+
+// MockRconClient is a mock implementation of the rcon.Client
+type MockRconClient struct {
+	mock.Mock
+}
+
+func (m *MockRconClient) Execute(command string) (string, error) {
+	args := m.Called(command)
+	return args.String(0), args.Error(1)
+}
+
+func Test_sendMessageToFactorio(t *testing.T) {
+	log = logrus.New()
+	log.Out = io.Discard
+	mockRconClient := new(MockRconClient)
+
+	type args struct {
+		message         string
+		achievementMode bool
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{"Test achivement mode", args{message: "test", achievementMode: true}, "[color=#7289DA][Discord]test[/color]"},
+		{"Test nicer layout mode", args{message: "test", achievementMode: false}, "/silent-command game.print('[color=#7289DA][Discord]test[/color]')"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			messagesToFactorio = make(chan string)
+			go sendMessageToFactorio(mockRconClient)
+			config.achievementMode = tt.args.achievementMode
+			mockRconClient.On("Execute", tt.want).Return("some response", nil)
+			messagesToFactorio <- tt.args.message
+			mockRconClient.AssertCalled(t, "Execute", tt.want)
+			close(messagesToFactorio)
+		})
+	}
 }
