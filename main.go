@@ -88,7 +88,10 @@ func main() {
 }
 
 func loadConfig() sConfig {
-	return sConfig{allRocketLaunches: getenvBool("ALL_ROCKET_LAUNCHES")}
+	return sConfig{
+		allRocketLaunches: getenvBool("ALL_ROCKET_LAUNCHES"),
+		achievementMode:   getenvBool("ACHIEVEMENT_MODE"),
+	}
 }
 
 // Parse the message and format it in a way for Discord
@@ -219,11 +222,16 @@ func sendMessageToDiscord(discord *discordgo.Session) {
 	}
 }
 
-func sendMessageToFactorio(rconClient *rcon.Client) {
+func sendMessageToFactorio(rconClient RconClient) {
 	log.Debugf("Setting up message handler")
 	for message := range messagesToFactorio {
 		message = strings.Replace(message, "'", "\\'", -1)
-		cmd := "/silent-command game.print('[color=#7289DA][Discord]" + message + "[/color]')"
+		cmd := ""
+		if config.achievementMode {
+			cmd = "[color=#7289DA][Discord]" + message + "[/color]"
+		} else {
+			cmd = "/silent-command game.print('[color=#7289DA][Discord]" + message + "[/color]')"
+		}
 		log.WithFields(logrus.Fields{"cmd": cmd}).Debug("Sending command to Factorio (through RCON)")
 		_, err := rconClient.Execute(cmd)
 		if err != nil {
@@ -381,6 +389,7 @@ func setUpDiscord() *discordgo.Session {
 	discord, err := discordgo.New("Bot " + discordToken)
 	if err != nil {
 		log.WithFields(logrus.Fields{"err": err, "token": discordToken}).Panic("Could register bot with Discord")
+		return nil
 	}
 
 	// Listen to incoming messagesToDiscord from Discord
@@ -432,4 +441,9 @@ func checkRequiredEnvVariables() {
 
 type sConfig struct {
 	allRocketLaunches bool
+	achievementMode   bool
+}
+
+type RconClient interface {
+	Execute(command string) (string, error)
 }

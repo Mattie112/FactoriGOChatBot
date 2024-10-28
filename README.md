@@ -65,8 +65,19 @@ RCON_PASSWORD=xx # The rcon password
 FACTORIO_LOG=C:\Users\xx\AppData\Roaming\Factorio\console.log (Unix path also supported) # Path to the chat log (--console-log)
 MOD_LOG=C:\Users\xx\AppData\Roaming\Factorio\script-output\factorigo-chat-bot\factorigo-chat-bot.log (Optional) # If you use the companion mod supply the path to that log file here
 POLL_LOG=1 # If this is set, logs will be polled instead of using inotify. This may be required with docker depending on your storage setup
+ALL_ROCKET_LAUNCHES=false # By default it will say only some rocket launches (1, 10, 100 etc). If you want to see all set this to true
+ACHIEVEMENT_MODE=true # For nicer text-layout (and possible some special commands in the future), we need to execute commands. THIS WILL DISABLE ACHIEVEMENTS.
 ```
 When using docker: don't forget to also mount/bind the log-files to your container.  
+
+## Achievements
+(See config options above)
+
+Nicer layout: not compabitle with achivements
+![Achievements](./docs/imgs/achievement_off.png)
+
+Default layout (and commands disabled): compatible with achievements
+![Achievements](./docs/imgs/achievement_on.png)
 
 ## Installation
 
