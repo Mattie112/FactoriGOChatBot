@@ -26,7 +26,7 @@ func Test_parseAndFormatMessage(t *testing.T) {
 	}()
 	type args struct {
 		message string
-		config  sConfig
+		config  botConfig
 	}
 	config = botConfig{sendJoinLeave: true}
 	tests := []struct {
@@ -70,7 +70,7 @@ func Test_parseAndFormatMessage(t *testing.T) {
 		{"CORRUPT", args{message: "[FactoriGOChatBot]: \"2852569 [foobar]\""}, ""},
 		// Messages I want to ignore
 		{"GPS-hide", args{message: "2022-04-14 19:41:54 [CHAT] Mattie: [gps=98,69]"}, ""},
-		{"GPS-show", args{message: "2022-04-14 19:41:54 [CHAT] Mattie: [gps=98,69]", config: sConfig{sendGPSPing: true}}, ":map: | `Mattie`: [gps=98,69]"},
+		{"GPS-show", args{message: "2022-04-14 19:41:54 [CHAT] Mattie: [gps=98,69]", config: botConfig{sendGPSPing: true}}, ":map: | `Mattie`: [gps=98,69]"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
