@@ -137,6 +137,12 @@ func parseAndFormatMessage(message string) string {
 			}
 			return ""
 		}
+
+		// When using achievement mode, ignore all messages from the server to prevent a message-loop
+		if config.achievementMode && match[1] == "<server>" {
+			return ""
+		}
+
 		return fmt.Sprintf(":speech_left: | `%s`: %s", match[1], messageContent)
 	case "JOIN":
 		playersOnline += 1
