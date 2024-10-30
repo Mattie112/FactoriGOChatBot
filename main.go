@@ -9,7 +9,6 @@ import (
 	"github.com/nxadm/tail"
 	"github.com/sirupsen/logrus"
 	"io"
-	"net"
 	"os"
 	"os/signal"
 	"regexp"
@@ -104,7 +103,7 @@ func loadConfig() botConfig {
 		rconPassword:      os.Getenv("RCON_PASSWORD"),
 		factorioLog:       os.Getenv("FACTORIO_LOG"),
 		modLog:            os.Getenv("MOD_LOG"),
-		pollLog:           getEnvBool(os.Getenv("POLL_LOG")),
+		pollLog:           getEnvBool("POLL_LOG"),
 		allRocketLaunches: getEnvBool("ALL_ROCKET_LAUNCHES"),
 		achievementMode:   getEnvBool("ACHIEVEMENT_MODE"),
 		sendGPSPing:       getEnvBool("SEND_GPS_PING"),
@@ -371,7 +370,7 @@ func sendDiscordStatusUpdates(discord *discordgo.Session) {
 }
 
 func setUpRCON() *rcon.Client {
-	rconClient := rcon.New(fmt.Sprintf("%s:%d", config.rconIp.String(), config.rconPort), config.rconPassword, time.Second*2)
+	rconClient := rcon.New(fmt.Sprintf("%s:%d", config.rconIp, config.rconPort), config.rconPassword, time.Second*2)
 	updatePlayerCount(rconClient)
 	return rconClient
 }
@@ -468,7 +467,7 @@ type botConfig struct {
 	logLevel          string
 	discordToken      string
 	discordChannelId  string
-	rconIp            net.IP
+	rconIp            string
 	rconPort          int
 	rconPassword      string
 	factorioLog       string

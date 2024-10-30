@@ -6,6 +6,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"net"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -70,14 +71,28 @@ func getEnvBool(key string) bool {
 	return v
 }
 
-func getEnvIp(key string) (net.IP, error) {
-	v := os.Getenv(key)
-	ip := net.ParseIP(v)
-	if ip == nil {
-		err := errors.New("cannot parse string as IP")
-		return nil, err
+func validateIpOrHostname(input string) (string, error) {
+	// Check if input is a valid IP address
+	if net.ParseIP(input) != nil {
+		return input, nil
 	}
-	return ip, nil
+
+	// Check if input is a valid hostname
+	hostnameRegex := `^(([a-zA-Z]|[a-zA-Z][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z]|[A-Za-z][A-Za-z0-9\-]*[A-Za-z0-9])$`
+	matched, err := regexp.MatchString(hostnameRegex, input)
+	if err != nil {
+		return "", err
+	}
+	if matched {
+		return input, nil
+	}
+
+	return "", errors.New("input is neither a valid IP address nor a valid hostname")
+}
+
+func getEnvIp(key string) (string, error) {
+	v := os.Getenv(key)
+	return validateIpOrHostname(v)
 }
 
 func getEnvInt(key string) (int, error) {

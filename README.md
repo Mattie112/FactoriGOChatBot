@@ -59,7 +59,7 @@ Here is a list of all variables available:
 LOG_LEVEL=info (optional) # This is the log level, when submitting a bug please set this to debug
 DISCORD_TOKEN=xx # The Discord Authentication token for your bot
 DISCORD_CHANNEL_ID=xx # The Discord channel ID 
-RCON_IP=xx # The IP of your Factorio server
+RCON_IP=xx # The IP of your Factorio server, a hostname is also allowed
 RCON_PORT=xx # The rcon port
 RCON_PASSWORD=xx # The rcon password
 FACTORIO_LOG=C:\Users\xx\AppData\Roaming\Factorio\console.log (Unix path also supported) # Path to the chat log (--console-log)
