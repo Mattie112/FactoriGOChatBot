@@ -73,6 +73,7 @@ func Test_parseAndFormatMessage(t *testing.T) {
 		// Messages I want to ignore
 		{"GPS-hide", args{message: "2022-04-14 19:41:54 [CHAT] Mattie: [gps=98,69]"}, ""},
 		{"GPS-show", args{message: "2022-04-14 19:41:54 [CHAT] Mattie: [gps=98,69]", config: botConfig{sendGPSPing: true}}, ":map: | `Mattie`: [gps=98,69]"},
+		{"message-loop-issue-#28", args{message: "2024-10-31 20:15:53 [CHAT] <server>: [color=#7289DA][Discord][Mattie]: test123[/color]", config: botConfig{achievementMode: true}}, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
