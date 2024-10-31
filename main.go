@@ -139,7 +139,7 @@ func parseAndFormatMessage(message string) string {
 		}
 
 		// When using achievement mode, ignore all messages from the server to prevent a message-loop
-		if config.achievementMode && match[1] == "<server>" {
+		if config.achievementMode && strings.HasPrefix(match[1], "<server>: ") {
 			return ""
 		}
 
