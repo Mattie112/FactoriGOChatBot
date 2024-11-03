@@ -67,6 +67,10 @@ func main() {
 	go sendMessageToDiscord(discord)
 	go handleCommands(rconClient)
 
+	// Notify Discord / Factorio the bot is online
+	messagesToDiscord <- "FactoriGO Chat Bot is online!"
+	messagesToFactorio <- "FactoriGO Chat Bot is online!"
+
 	// Setup recurring tasks
 	periodicTasks := schedule(60*time.Second, func() {
 		updatePlayerCount(rconClient)
