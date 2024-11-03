@@ -61,7 +61,7 @@ func Test_getEnvOrDefaultBool(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			os.Setenv(tt.args.key, fmt.Sprintf("%v", tt.args.valueToSet))
+			_ = os.Setenv(tt.args.key, fmt.Sprintf("%v", tt.args.valueToSet))
 			if got := getEnvOrDefaultBool(tt.args.key, tt.args.defaultVal); got != tt.want {
 				t.Errorf("getEnvOrDefaultBool() = %v, want %v", got, tt.want)
 			}
