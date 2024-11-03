@@ -99,7 +99,7 @@ func loadConfig() botConfig {
 		log.WithError(err).Error("Cannot load Config")
 	}
 	return botConfig{
-		logLevel:          getEnvOrDefault("LOG_LEVEL", "info"),
+		logLevel:          getEnvStrOrDefault("LOG_LEVEL", "info"),
 		discordToken:      os.Getenv("DISCORD_TOKEN"),
 		discordChannelId:  os.Getenv("DISCORD_CHANNEL_ID"),
 		rconIp:            ip,
@@ -113,20 +113,6 @@ func loadConfig() botConfig {
 		sendGPSPing:       getEnvOrDefaultBool("SEND_GPS_PING", false),
 		sendJoinLeave:     getEnvOrDefaultBool("SEND_JOIN_LEAVE", true),
 	}
-}
-
-func getEnvOrDefault(key, defaultVal string) string {
-	if value, exists := os.LookupEnv(key); exists {
-		return value
-	}
-	return defaultVal
-}
-
-func getEnvOrDefaultBool(key string, defaultVal bool) bool {
-	if value, exists := os.LookupEnv(key); exists {
-		return value == "true"
-	}
-	return defaultVal
 }
 
 // Parse the message and format it in a way for Discord
