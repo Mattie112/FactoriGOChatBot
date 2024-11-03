@@ -99,7 +99,7 @@ func loadConfig() botConfig {
 		log.WithError(err).Error("Cannot load Config")
 	}
 	return botConfig{
-		logLevel:          os.Getenv("LOG_LEVEL"),
+		logLevel:          getEnvStrOrDefault("LOG_LEVEL", "info"),
 		discordToken:      os.Getenv("DISCORD_TOKEN"),
 		discordChannelId:  os.Getenv("DISCORD_CHANNEL_ID"),
 		rconIp:            ip,
@@ -107,11 +107,11 @@ func loadConfig() botConfig {
 		rconPassword:      os.Getenv("RCON_PASSWORD"),
 		factorioLog:       os.Getenv("FACTORIO_LOG"),
 		modLog:            os.Getenv("MOD_LOG"),
-		pollLog:           getEnvBool("POLL_LOG"),
-		allRocketLaunches: getEnvBool("ALL_ROCKET_LAUNCHES"),
-		achievementMode:   getEnvBool("ACHIEVEMENT_MODE"),
-		sendGPSPing:       getEnvBool("SEND_GPS_PING"),
-		sendJoinLeave:     getEnvBool("SEND_JOIN_LEAVE"),
+		pollLog:           getEnvOrDefaultBool("POLL_LOG", false),
+		allRocketLaunches: getEnvOrDefaultBool("ALL_ROCKET_LAUNCHES", false),
+		achievementMode:   getEnvOrDefaultBool("ACHIEVEMENT_MODE", true),
+		sendGPSPing:       getEnvOrDefaultBool("SEND_GPS_PING", false),
+		sendJoinLeave:     getEnvOrDefaultBool("SEND_JOIN_LEAVE", true),
 	}
 }
 

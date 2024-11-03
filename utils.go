@@ -49,26 +49,23 @@ func getLoggerFromConfig(logLevel string) *logrus.Logger {
 	return log
 }
 
-func getEnvStr(key string) (string, error) {
-	v := os.Getenv(key)
-	return v, nil
+func getEnvStrOrDefault(key, defaultVal string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return defaultVal
 }
 
-func getEnvBool(key string) bool {
-	s, err := getEnvStr(key)
-	if err != nil {
-		log.WithField("envVar", key).WithError(err).Error("Cannot parse env variable as boolean")
-		return false
+func getEnvOrDefaultBool(key string, defaultVal bool) bool {
+	if value, exists := os.LookupEnv(key); exists {
+		b, err := strconv.ParseBool(value)
+		if err != nil {
+			log.WithField("envVar", key).WithError(err).Error("Cannot parse env variable as boolean")
+			return defaultVal
+		}
+		return b
 	}
-	if s == "" {
-		return false // No env var is false
-	}
-	v, err := strconv.ParseBool(s)
-	if err != nil {
-		log.WithField("envVar", key).WithError(err).Error("Cannot parse env variable as boolean")
-		return false
-	}
-	return v
+	return defaultVal
 }
 
 func validateIpOrHostname(input string) (string, error) {
