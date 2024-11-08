@@ -148,7 +148,6 @@ func parseAndFormatMessage(message string) string {
 
 		return fmt.Sprintf(":speech_left: | `%s`: %s", match[1], messageContent)
 	case "JOIN":
-		playersOnline += 1
 		if !config.sendJoinLeave {
 			return ""
 		}
@@ -156,7 +155,6 @@ func parseAndFormatMessage(message string) string {
 		match := re.FindStringSubmatch(message)
 		return fmt.Sprintf(":green_circle: | `%s` joined the game!", match[1])
 	case "LEAVE":
-		playersOnline -= 1
 		if !config.sendJoinLeave {
 			return ""
 		}
@@ -398,7 +396,7 @@ func getSeedFromFactorio(rconClient *rcon.Client) string {
 	return seed
 }
 
-func updatePlayerCount(rconClient *rcon.Client) {
+func getPlayersOnlineFromFactorio(rconClient *rcon.Client) int {
 	msg, err := rconClient.Execute("/players online count")
 	if err != nil {
 		log.WithFields(logrus.Fields{"err": err}).Error("Could not get player count from Factorio")
@@ -409,6 +407,11 @@ func updatePlayerCount(rconClient *rcon.Client) {
 		log.WithFields(logrus.Fields{"err": err}).Panic("Could not parse player count from Factorio")
 		return
 	}
+	return playersOnline
+}
+
+func updatePlayerCount(rconClient *rcon.Client) {
+	getPlayersOnlineFromFactorio(rconClient)
 	if playersOnline > 0 {
 		updateDiscordStatus(discordgo.ActivityTypeWatching, "the factory grow")
 	} else {
@@ -446,7 +449,7 @@ func handleCommands(rconClient *rcon.Client) {
 	for command := range commands {
 		switch command {
 		case "!online":
-			messagesToDiscord <- strconv.Itoa(playersOnline) + " players online"
+			messagesToDiscord <- strconv.Itoa(getPlayersOnlineFromFactorio(rconClient)) + " players online"
 			break
 		case "!seed":
 			messagesToDiscord <- getSeedFromFactorio(rconClient)
