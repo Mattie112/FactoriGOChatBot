@@ -396,18 +396,18 @@ func getSeedFromFactorio(rconClient *rcon.Client) string {
 	return seed
 }
 
-func getPlayersOnlineFromFactorio(rconClient *rcon.Client) int {
+func getPlayersOnlineFromFactorio(rconClient *rcon.Client) (int, error) {
 	msg, err := rconClient.Execute("/players online count")
 	if err != nil {
 		log.WithFields(logrus.Fields{"err": err}).Error("Could not get player count from Factorio")
-		return
+		return 0, err
 	}
-	playersOnline, err = strconv.Atoi(strings.Split(strings.Split(msg, "(")[1], ")")[0])
+	playersOnline, err := strconv.Atoi(strings.Split(strings.Split(msg, "(")[1], ")")[0])
 	if err != nil {
 		log.WithFields(logrus.Fields{"err": err}).Panic("Could not parse player count from Factorio")
-		return
+		return 0, err
 	}
-	return playersOnline
+	return playersOnline, nil
 }
 
 func updatePlayerCount(rconClient *rcon.Client) {
@@ -449,7 +449,10 @@ func handleCommands(rconClient *rcon.Client) {
 	for command := range commands {
 		switch command {
 		case "!online":
-			messagesToDiscord <- strconv.Itoa(getPlayersOnlineFromFactorio(rconClient)) + " players online"
+			playersOnline, err := getPlayersOnlineFromFactorio(rconClient)
+			if err == nil {
+				messagesToDiscord <- strconv.Itoa(playersOnline) + " players online"
+			}
 			break
 		case "!seed":
 			messagesToDiscord <- getSeedFromFactorio(rconClient)
