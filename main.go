@@ -396,13 +396,13 @@ func getSeedFromFactorio(rconClient *rcon.Client) string {
 	return seed
 }
 
-func getPlayersOnlineFromFactorio(rconClient *rcon.Client) (int, error) {
+func getPlayersOnlineFromFactorio(rconClient RconClient) (int, error) {
 	msg, err := rconClient.Execute("/players online count")
 	if err != nil {
 		log.WithFields(logrus.Fields{"err": err}).Error("Could not get player count from Factorio")
 		return 0, err
 	}
-	playersOnline, err := strconv.Atoi(strings.Split(strings.Split(msg, "(")[1], ")")[0])
+	playersOnline, err = strconv.Atoi(strings.Split(strings.Split(msg, "(")[1], ")")[0])
 	if err != nil {
 		log.WithFields(logrus.Fields{"err": err}).Panic("Could not parse player count from Factorio")
 		return 0, err
@@ -410,8 +410,8 @@ func getPlayersOnlineFromFactorio(rconClient *rcon.Client) (int, error) {
 	return playersOnline, nil
 }
 
-func updatePlayerCount(rconClient *rcon.Client) {
-	getPlayersOnlineFromFactorio(rconClient)
+func updatePlayerCount(rconClient RconClient) {
+	_, _ = getPlayersOnlineFromFactorio(rconClient)
 	if playersOnline > 0 {
 		updateDiscordStatus(discordgo.ActivityTypeWatching, "the factory grow")
 	} else {
