@@ -196,3 +196,43 @@ func Test_sendMessageToFactorio(t *testing.T) {
 		})
 	}
 }
+
+func Test_updatePlayerCount(t *testing.T) {
+	log = logrus.New()
+	log.Out = io.Discard
+
+	type args struct {
+		playersOnline string
+		expected      string
+	}
+	tests := []struct {
+		name string
+		args args
+	}{
+		{"0 players online", args{playersOnline: "Online players (0):", expected: "the world burn"}},
+		{"1 players online", args{playersOnline: "Online players (1):", expected: "the factory grow"}},
+		{"123 players online", args{playersOnline: "Online players (123):", expected: "the factory grow"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			discordActivities = make(chan discordgo.Activity, 1)
+			mockRconClient := new(MockRconClient)
+			// Return the amount of players online when Execute is called
+			mockRconClient.On("Execute", "/players online count").Return(tt.args.playersOnline, nil)
+			// Execute the funtion tested
+			updatePlayerCount(mockRconClient)
+			// Make sure we did a call to the RCON client
+			mockRconClient.AssertCalled(t, "Execute", "/players online count")
+			// Read back the activity from the channel, and make sure it is what we expect
+			activity := <-discordActivities
+			if activity.Type != discordgo.ActivityTypeWatching {
+				t.Errorf("updatePlayerCount() = '%v', want '%v'", activity.Type, discordgo.ActivityTypeWatching)
+			}
+			if activity.Name != tt.args.expected {
+				t.Errorf("updatePlayerCount() = '%v', want '%v'", activity.Name, tt.args.expected)
+			}
+			close(discordActivities)
+		})
+	}
+}
