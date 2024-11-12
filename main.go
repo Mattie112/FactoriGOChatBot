@@ -129,7 +129,7 @@ func parseAndFormatMessage(message string) string {
 		// Extracted to keep this function small
 		return parseModLogEntries(message)
 	case "CHAT":
-		var re = regexp.MustCompile(`(?m)] (.*): (.*)`)
+		var re = regexp.MustCompile(`(?mU)] (.*): (.*?)`)
 		match := re.FindStringSubmatch(message)
 
 		// Ignore GPS (= map pings)
@@ -142,7 +142,7 @@ func parseAndFormatMessage(message string) string {
 		}
 
 		// When using achievement mode, ignore all messages from the server to prevent a message-loop
-		if config.achievementMode && strings.HasPrefix(match[1], "<server>: ") {
+		if config.achievementMode && strings.HasPrefix(match[1], "<server>") {
 			return ""
 		}
 
