@@ -151,14 +151,14 @@ func parseAndFormatMessage(message string) string {
 		if !config.sendJoinLeave {
 			return ""
 		}
-		var re = regexp.MustCompile(`(?m)] (\w*)`)
+		var re = regexp.MustCompile(`(?m)] ([\w.-]*)`)
 		match := re.FindStringSubmatch(message)
 		return fmt.Sprintf(":green_circle: | `%s` joined the game!", match[1])
 	case "LEAVE":
 		if !config.sendJoinLeave {
 			return ""
 		}
-		var re = regexp.MustCompile(`(?m)] (\w*)`)
+		var re = regexp.MustCompile(`(?m)] ([\w.-]*)`)
 		match := re.FindStringSubmatch(message)
 		return fmt.Sprintf(":red_circle: | `%s` left the game!", match[1])
 	default:

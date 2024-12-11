@@ -75,6 +75,10 @@ func Test_parseAndFormatMessage(t *testing.T) {
 		{"GPS-show", args{message: "2022-04-14 19:41:54 [CHAT] Mattie: [gps=98,69]", config: botConfig{sendGPSPing: true}}, ":map: | `Mattie`: [gps=98,69]"},
 		{"message-loop-issue-#28", args{message: "2024-10-31 20:15:53 [CHAT] <server>: [color=#7289DA][Discord][Mattie]: test123[/color]", config: botConfig{achievementMode: true}}, ""},
 		{"message-loop-issue-#37", args{message: "2024-10-31 20:15:53 [CHAT] <server>: [color=#7289DA][Discord]FactoriGO Chat Bot is online![/color]", config: botConfig{achievementMode: true}}, ""},
+		{"message-loop-issue-#37", args{message: "2024-10-31 20:15:53 [CHAT] <server>: [color=#7289DA][Discord]FactoriGO Chat Bot is online![/color]", config: botConfig{achievementMode: true}}, ""},
+		{"#43 join-", args{message: "2024-12-11 14:21:19 [JOIN] foo-bar joined the game", config: botConfig{sendJoinLeave: true}}, ":green_circle: | `foo-bar` joined the game!"},
+		{"#43 leave", args{message: "2024-12-11 14:21:19 [LEAVE] foo-bar joined the game", config: botConfig{sendJoinLeave: true}}, ":red_circle: | `foo-bar` left the game!"},
+		{"#43 chat", args{message: "2024-12-11 14:21:19 [CHAT] foo-bar: Some chat message"}, ":speech_left: | `foo-bar`: Some chat message"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
