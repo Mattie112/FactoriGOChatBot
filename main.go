@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
 	"github.com/forPelevin/gomoji"
@@ -9,6 +10,7 @@ import (
 	"github.com/nxadm/tail"
 	"github.com/sirupsen/logrus"
 	"io"
+	"net"
 	"os"
 	"os/signal"
 	"regexp"
@@ -16,22 +18,39 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 )
 
 var (
-	log                *logrus.Logger
+	// The logger always exists (so nothing can hit a nil logger), main() replaces it with a configured one
+	log                = logrus.New()
 	messagesToDiscord  chan string
 	messagesToFactorio chan string
 	discordActivities  chan discordgo.Activity
 	commands           chan string
-	playersOnline      int
 	seed               string
-	tailFile           *tail.Tail
-	// VERSION These can be injected at build time -ldflags "-InputArgs main.VERSION=dev main.BUILD_TIME=201610251410"
+	// VERSION These can be injected at build time: -ldflags "-X main.VERSION=dev -X main.BUILDTIME=201610251410"
 	VERSION = "Undefined"
-	// BUILDTIME These can be injected at build time -ldflags "-InputArgs main.VERSION=dev main.BUILD_TIME=201610251410"
+	// BUILDTIME These can be injected at build time: -ldflags "-X main.VERSION=dev -X main.BUILDTIME=201610251410"
 	BUILDTIME = "Undefined"
 	config    botConfig
+)
+
+var (
+	// The type of a log line is the first [TAG] found, e.g. "2022-02-01 15:31:19 [JOIN] Mattie joined the game"
+	reMessageType = regexp.MustCompile(`\[(\w+)]`)
+	// "[CHAT] <name>: <message>"
+	reChat = regexp.MustCompile(`\[CHAT] (.*?): (.*)`)
+	// "[JOIN] <name> joined the game" / "[LEAVE] <name> left the game"
+	reJoinLeave = regexp.MustCompile(`\[(?:JOIN|LEAVE)] (\S+)`)
+	// Entries written by the companion mod: "[TYPE:field:field:...]"
+	reModEntry = regexp.MustCompile(`\[([A-Z_]+):([^\]]*)]`)
+	// "Online players (3):"
+	rePlayersOnline = regexp.MustCompile(`\((\d+)\)`)
+	// Custom Discord emoji: <:name:id> or <a:name:id>
+	reCustomEmoji = regexp.MustCompile(`<a?:(\w+):\d+>`)
+
+	luaStringEscaper = strings.NewReplacer(`\`, `\\`, `'`, `\'`)
 )
 
 func main() {
@@ -45,21 +64,37 @@ func main() {
 	log = getLoggerFromConfig(os.Getenv("LOG_LEVEL")) // I want the logger to be up before the config is loaded, so I cannot use the config struct here
 	log.Infof("Starting FactoriGO Chat Bot %s - %s", VERSION, BUILDTIME)
 	checkRequiredEnvVariables()
-	config = loadConfig() // Load optional config
-
-	playersOnline = 0
+	var err error
+	config, err = loadConfig()
+	if err != nil {
+		log.WithError(err).Fatal("Cannot load config")
+	}
 
 	messagesToDiscord = make(chan string)
 	messagesToFactorio = make(chan string)
 	commands = make(chan string)
+	discordActivities = make(chan discordgo.Activity)
+
+	// Open the log files first, without them the bot is useless
+	logFiles := []string{config.factorioLog}
+	if config.modLog != "" {
+		logFiles = append(logFiles, config.modLog)
+	}
+	var tails []*tail.Tail
+	for _, logFile := range logFiles {
+		t, err := tailLogFile(logFile)
+		if err != nil {
+			log.WithError(err).WithField("file", logFile).Fatal("Failed to open log file")
+		}
+		tails = append(tails, t)
+	}
 
 	discord := setUpDiscord()
 	rconClient := setUpRCON()
 
 	// Setup file watchers
-	go readFactorioLogFile(config.factorioLog)
-	if config.modLog != "" {
-		go readFactorioLogFile(config.modLog)
+	for _, t := range tails {
+		go processLogLines(t)
 	}
 
 	// Start functions that handle the dataflow
@@ -78,28 +113,32 @@ func main() {
 
 	// Keep running until getting exit signal
 	sc := make(chan os.Signal, 1)
-	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
+	signal.Notify(sc, os.Interrupt, syscall.SIGTERM)
 	<-sc
 
-	// Cleanup
+	// Cleanup: stop everything that produces messages. The data channels are deliberately not closed, a producer
+	// that is still busy would panic on a closed channel, and the process is about to exit anyway.
+	log.Info("Shutting down")
 	close(periodicTasks)
-	close(messagesToDiscord)
-	close(messagesToFactorio)
-	close(commands)
 	_ = discord.Close()
+	for _, t := range tails {
+		_ = t.Stop()
+	}
 }
 
-func loadConfig() botConfig {
+func loadConfig() (botConfig, error) {
 	ip, err := getEnvIp("RCON_IP")
 	if err != nil {
-		log.WithError(err).Error("Cannot load Config")
+		return botConfig{}, fmt.Errorf("RCON_IP: %w", err)
 	}
 	rconPort, err := getEnvInt("RCON_PORT")
 	if err != nil {
-		log.WithError(err).Error("Cannot load Config")
+		return botConfig{}, fmt.Errorf("RCON_PORT: %w", err)
+	}
+	if rconPort < 1 || rconPort > 65535 {
+		return botConfig{}, fmt.Errorf("RCON_PORT: %d is not a valid port", rconPort)
 	}
 	return botConfig{
-		logLevel:          getEnvStrOrDefault("LOG_LEVEL", "info"),
 		discordToken:      os.Getenv("DISCORD_TOKEN"),
 		discordChannelId:  os.Getenv("DISCORD_CHANNEL_ID"),
 		rconIp:            ip,
@@ -112,16 +151,25 @@ func loadConfig() botConfig {
 		achievementMode:   getEnvOrDefaultBool("ACHIEVEMENT_MODE", true),
 		sendGPSPing:       getEnvOrDefaultBool("SEND_GPS_PING", false),
 		sendJoinLeave:     getEnvOrDefaultBool("SEND_JOIN_LEAVE", true),
-	}
+	}, nil
 }
 
-// Parse the message and format it in a way for Discord
-func parseAndFormatMessage(message string) string {
-	var re = regexp.MustCompile(`(?m)\[(\w*)]`)
-	messageType := re.FindStringSubmatch(message)
+// Wrap untrusted text (player names etc.) in a Discord inline code block
+func inlineCode(text string) string {
+	return "`" + strings.ReplaceAll(text, "`", "'") + "`"
+}
 
-	if len(messageType) < 2 {
-		return ""
+func newActivity(activityType discordgo.ActivityType, name string) *discordgo.Activity {
+	return &discordgo.Activity{Name: name, Type: activityType}
+}
+
+// Parse a line from the Factorio log and format it in a way for Discord.
+// Returns the message to post (empty = nothing to post) and optionally a new status for the bot.
+// A line that cannot be parsed (unknown, truncated, corrupted) is ignored, it must never crash the bot.
+func parseAndFormatMessage(message string) (string, *discordgo.Activity) {
+	messageType := reMessageType.FindStringSubmatch(message)
+	if messageType == nil {
+		return "", nil
 	}
 
 	switch messageType[1] {
@@ -129,143 +177,154 @@ func parseAndFormatMessage(message string) string {
 		// Extracted to keep this function small
 		return parseModLogEntries(message)
 	case "CHAT":
-		var re = regexp.MustCompile(`(?mU)] (.*): (.*?)`)
-		match := re.FindStringSubmatch(message)
+		match := reChat.FindStringSubmatch(message)
+		if match == nil {
+			log.WithField("message", message).Debug("Could not parse chat message from Factorio, ignoring")
+			return "", nil
+		}
+		name, messageContent := match[1], match[2]
 
 		// Ignore GPS (= map pings)
-		messageContent := match[2]
 		if strings.Contains(messageContent, "[gps=") {
 			if config.sendGPSPing {
-				return fmt.Sprintf(":map: | `%s`: %s", match[1], messageContent)
+				return fmt.Sprintf(":map: | %s: %s", inlineCode(name), messageContent), nil
 			}
-			return ""
+			return "", nil
 		}
 
 		// When using achievement mode, ignore all messages from the server to prevent a message-loop
-		if config.achievementMode && strings.HasPrefix(match[1], "<server>") {
-			return ""
+		if config.achievementMode && strings.HasPrefix(name, "<server>") {
+			return "", nil
 		}
 
-		return fmt.Sprintf(":speech_left: | `%s`: %s", match[1], messageContent)
-	case "JOIN":
+		return fmt.Sprintf(":speech_left: | %s: %s", inlineCode(name), messageContent), nil
+	case "JOIN", "LEAVE":
 		if !config.sendJoinLeave {
-			return ""
+			return "", nil
 		}
-		var re = regexp.MustCompile(`(?m)] ([\w.-]*)`)
-		match := re.FindStringSubmatch(message)
-		return fmt.Sprintf(":green_circle: | `%s` joined the game!", match[1])
-	case "LEAVE":
-		if !config.sendJoinLeave {
-			return ""
+		match := reJoinLeave.FindStringSubmatch(message)
+		if match == nil {
+			log.WithField("message", message).Debug("Could not parse join/leave message from Factorio, ignoring")
+			return "", nil
 		}
-		var re = regexp.MustCompile(`(?m)] ([\w.-]*)`)
-		match := re.FindStringSubmatch(message)
-		return fmt.Sprintf(":red_circle: | `%s` left the game!", match[1])
+		if messageType[1] == "JOIN" {
+			return fmt.Sprintf(":green_circle: | %s joined the game!", inlineCode(match[1])), nil
+		}
+		return fmt.Sprintf(":red_circle: | %s left the game!", inlineCode(match[1])), nil
 	default:
 		log.WithField("message", message).Debug("Could not parse message from Factorio, ignoring")
-		return ""
+		return "", nil
 	}
 }
 
 // With the companion mod (or manual edit of save game) we can extract extra information!
-func parseModLogEntries(message string) string {
-	var re = regexp.MustCompile(`(?mU) \[(.*):`)
-	messageType := re.FindStringSubmatch(message)
-
-	if len(messageType) < 1 {
-		return ""
+// Format: [FactoriGOChatBot]: "<tick> [TYPE:field:field:...]"
+func parseModLogEntries(message string) (string, *discordgo.Activity) {
+	entry := reModEntry.FindStringSubmatch(message)
+	if entry == nil {
+		return "", nil
 	}
+	fields := strings.Split(entry[2], ":")
 
-	switch messageType[1] {
+	switch entry[1] {
 	case "RESEARCH_STARTED":
-		var re = regexp.MustCompile(`(?m):(\S*)]`)
-		match := re.FindStringSubmatch(message)
-		return fmt.Sprintf(":microscope: | Research started: `%s`", match[1])
+		if fields[0] == "" {
+			return "", nil
+		}
+		return fmt.Sprintf(":microscope: | Research started: %s", inlineCode(fields[0])), nil
 	case "RESEARCH_FINISHED":
-		var re = regexp.MustCompile(`(?m):(\S*)]`)
-		match := re.FindStringSubmatch(message)
-		updateDiscordStatus(discordgo.ActivityTypeListening, match[1])
-		return fmt.Sprintf(":microscope: | Research finished: `%s`", match[1])
+		if fields[0] == "" {
+			return "", nil
+		}
+		return fmt.Sprintf(":microscope: | Research finished: %s", inlineCode(fields[0])),
+			newActivity(discordgo.ActivityTypeListening, fields[0])
 	case "PLAYER_DIED":
-		var re = regexp.MustCompile(`(?m):([\w -]*)+`)
-		match := re.FindAllStringSubmatch(message, -1)
+		// [PLAYER_DIED:name]                   -> no cause
+		// [PLAYER_DIED:name:cause]             -> companion mod <= 0.5.0
+		// [PLAYER_DIED:name:cause:count:total] -> companion mod >= 0.6.0
+		player := fields[0]
+		if player == "" {
+			return "", nil
+		}
+		activity := newActivity(discordgo.ActivityTypeWatching, player+" dying")
 
-		updateDiscordStatus(discordgo.ActivityTypeWatching, match[1][1]+" dying")
-		// No cause
-		if len(match) == 2 {
-			return fmt.Sprintf(":skull: | Player died: `%s` (unknown cause)", match[1][1])
+		if len(fields) == 1 {
+			return fmt.Sprintf(":skull: | Player died: %s (unknown cause)", inlineCode(player)), activity
 		}
 
-		cause := match[2][1]
+		cause := fields[1]
 		addText := ""
-
-		if cause == "locomotive" || cause == "cargo-wagon" || cause == "artillery-wagon" || cause == "fluid-wagon" {
+		switch cause {
+		case "locomotive":
 			addText = " (hahaha!)"
-		}
-
-		if cause == "cargo-wagon" || cause == "artillery-wagon" || cause == "fluid-wagon" {
+		case "cargo-wagon", "artillery-wagon", "fluid-wagon":
 			addText = " (hahaha! how the hell did you do that?!?!)"
-		}
-
-		if cause == "" {
+		case "":
 			cause = "unknown"
 		}
 
-		// Only cause (companion mod <= 0.5.0
-		if len(match) == 3 {
-			return fmt.Sprintf(":skull: | Player died: `%s`, cause: `%s`%s", match[1][1], cause, addText)
+		text := fmt.Sprintf(":skull: | Player died: %s, cause: %s%s", inlineCode(player), inlineCode(cause), addText)
+		if len(fields) >= 4 {
+			text += fmt.Sprintf(" (%s times out of %s deaths)", fields[2], fields[3])
 		}
-
-		// Cause and death count (companion mod >= 0.6.0)
-		if len(match) == 5 {
-			return fmt.Sprintf(":skull: | Player died: `%s`, cause: `%s`%s (%s times out of %s deaths)", match[1][1], cause, addText, match[3][1], match[4][1])
-		}
-
-		return ""
+		return text, activity
 	case "ROCKET_LAUNCHED":
-		updateDiscordStatus(discordgo.ActivityTypeWatching, "a rocket launch")
-		var re = regexp.MustCompile(`(?m):(\d*)]`)
-		match := re.FindStringSubmatch(message)
-		launchAmount, _ := strconv.Atoi(match[1])
-
-		if config.allRocketLaunches {
-			return fmt.Sprintf(":rocket: :rocket: :rocket: A rocket has been launched! (%d times)", launchAmount)
-		} else {
-			switch {
-			case launchAmount <= 5:
-				fallthrough
-			case launchAmount >= 10 && launchAmount < 100 && launchAmount%10 == 0:
-				fallthrough
-			case launchAmount >= 100 && launchAmount%100 == 0:
-				return fmt.Sprintf(":rocket: :rocket: :rocket: A rocket has been launched! (%d times)", launchAmount)
-			}
+		launchAmount, err := strconv.Atoi(fields[0])
+		if err != nil {
+			return "", nil
 		}
-		return ""
+		activity := newActivity(discordgo.ActivityTypeWatching, "a rocket launch")
+
+		// By default only announce the "special" launches: the first 5, every 10th up to 100 and every 100th after that
+		announce := config.allRocketLaunches ||
+			launchAmount <= 5 ||
+			(launchAmount >= 10 && launchAmount < 100 && launchAmount%10 == 0) ||
+			(launchAmount >= 100 && launchAmount%100 == 0)
+		if !announce {
+			return "", activity
+		}
+		return fmt.Sprintf(":rocket: :rocket: :rocket: A rocket has been launched! (%d times)", launchAmount), activity
 	default:
 		log.WithField("message", message).Debug("Could not parse message from mod, ignoring")
-		return ""
+		return "", nil
 	}
 }
 
 func sendMessageToDiscord(discord *discordgo.Session) {
 	for message := range messagesToDiscord {
-		_, err := discord.ChannelMessageSend(config.discordChannelId, message)
+		// Text coming from Factorio must never be able to ping @everyone / roles / users
+		_, err := discord.ChannelMessageSendComplex(config.discordChannelId, &discordgo.MessageSend{
+			Content:         message,
+			AllowedMentions: &discordgo.MessageAllowedMentions{},
+		})
 		if err != nil {
 			log.WithError(err).WithFields(logrus.Fields{"message": message}).Error("Failed to post message to Discord")
 		}
 	}
 }
 
+// Build the RCON command that shows a (Discord) message in Factorio.
+// The message is untrusted input: it must not be able to break out of the Lua string or start a new command.
+func buildFactorioCommand(message string, achievementMode bool) string {
+	// Drop control characters (newlines etc.)
+	message = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, message)
+
+	if achievementMode {
+		// Plain chat message, the prefix guarantees it never starts with a "/" (= command)
+		return "[color=#7289DA][Discord]" + message + "[/color]"
+	}
+	return "/silent-command game.print('[color=#7289DA][Discord]" + luaStringEscaper.Replace(message) + "[/color]')"
+}
+
 func sendMessageToFactorio(rconClient RconClient) {
 	log.Debugf("Setting up message handler")
 	for message := range messagesToFactorio {
-		message = strings.Replace(message, "'", "\\'", -1)
-		cmd := ""
-		if config.achievementMode {
-			cmd = "[color=#7289DA][Discord]" + message + "[/color]"
-		} else {
-			cmd = "/silent-command game.print('[color=#7289DA][Discord]" + message + "[/color]')"
-		}
+		cmd := buildFactorioCommand(message, config.achievementMode)
 		log.WithFields(logrus.Fields{"cmd": cmd}).Debug("Sending command to Factorio (through RCON)")
 		_, err := rconClient.Execute(cmd)
 		if err != nil {
@@ -275,8 +334,8 @@ func sendMessageToFactorio(rconClient RconClient) {
 }
 
 func onReceiveDiscordMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
-	// Ignore all messagesToDiscord created by the bot itself
-	if m.Author.ID == s.State.User.ID {
+	// Ignore all messages created by bots and webhooks (this includes the bot itself)
+	if m.Author == nil || m.Author.Bot {
 		return
 	}
 
@@ -285,33 +344,46 @@ func onReceiveDiscordMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	log.WithFields(logrus.Fields{"message": m.Content, "author": m.Author}).Debug("Received message on Discord")
+	log.WithFields(logrus.Fields{"message": m.Content, "author": m.Author.Username}).Debug("Received message on Discord")
 
-	// If the message is "ping" reply with "Pong!"
+	// If the message is "ping" reply with "Pong!" (no need to bother Factorio with it)
 	if m.Content == "ping" {
 		_, err := s.ChannelMessageSend(m.ChannelID, "Pong!")
 		if err != nil {
 			log.WithError(err).WithFields(logrus.Fields{"message": m.Content}).Error("Failed to send message to Discord")
 		}
+		return
 	}
 
-	// Send message away!
-	nick := m.Member.Nick
-	if nick == "" {
-		nick = m.Author.Username
+	// Member is not set for every message (e.g. webhooks), so fall back to the username
+	nick := m.Author.Username
+	if m.Member != nil && m.Member.Nick != "" {
+		nick = m.Member.Nick
 	}
 
+	// Mentions arrive as <@id>, replace them with the readable @name
+	content := m.ContentWithMentionsReplaced()
+	for _, attachment := range m.Attachments {
+		content += "\n(attachment: " + attachment.Filename + ")"
+	}
+
+	forwardDiscordMessage(nick, content)
+}
+
+// Send a Discord message away! (to Factorio, and to the command handler if it is a command)
+func forwardDiscordMessage(nick string, content string) {
 	// Parse message (and handle multilines)
-	messages := parseDiscordMessage(m.Content)
+	messages := parseDiscordMessage(content)
 	log.WithFields(logrus.Fields{"messages": messages}).Debugf("Sending Discord message to output channel")
 	for _, message := range messages {
-		if len(message) > 0 && message[0:1] == "!" {
+		if strings.HasPrefix(message, "!") {
 			commands <- message
 		}
 		messagesToFactorio <- fmt.Sprintf("[%s]: %s", nick, message)
 	}
 }
 
+// Convert a Discord message to lines Factorio can show, empty lines are dropped
 func parseDiscordMessage(message string) []string {
 	if gomoji.ContainsEmoji(message) {
 		res := gomoji.FindAll(message)
@@ -319,35 +391,44 @@ func parseDiscordMessage(message string) []string {
 			message = strings.Replace(message, emoji.Character, "**"+emoji.Slug+"**", -1)
 		}
 	}
-	messages := strings.Split(message, "\n")
+	message = reCustomEmoji.ReplaceAllString(message, ":$1:")
+
+	messages := make([]string, 0, 1)
+	for _, line := range strings.Split(message, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			messages = append(messages, line)
+		}
+	}
 	return messages
 }
 
-// Read the last line of a file and puts the parsed message on our output channel
-func readFactorioLogFile(filename string) {
-	seek := tail.SeekInfo{
-		Offset: 0,
-		Whence: io.SeekEnd,
-	}
-	var err error
-	tailFile, err = tail.TailFile(filename, tail.Config{
+// Start following a log file, only lines written from now on are reported
+func tailLogFile(filename string) (*tail.Tail, error) {
+	return tail.TailFile(filename, tail.Config{
 		Follow:    true,
 		ReOpen:    true,
 		MustExist: true,
 		Poll:      config.pollLog,
-		Location:  &seek,
+		Location:  &tail.SeekInfo{Offset: 0, Whence: io.SeekEnd},
+		// Wait for the newline, otherwise a line that is still being written is delivered in (unparsable) pieces
+		CompleteLines: true,
 	})
-	if err != nil {
-		log.WithError(err).Error("Failed to open mod log file")
-		return
-	}
+}
+
+// Read new lines from a log file and put the parsed messages on our output channels
+func processLogLines(tailFile *tail.Tail) {
 	for line := range tailFile.Lines {
 		if line.Err != nil {
 			log.WithError(line.Err).Error("Error while tailing log file")
 			continue
 		}
-		log.WithFields(logrus.Fields{"line": line.Text}).Debug("Read line from Factorio log")
-		message := parseAndFormatMessage(line.Text)
+		text := strings.TrimRight(line.Text, "\r\n")
+		log.WithFields(logrus.Fields{"line": text}).Debug("Read line from Factorio log")
+		message, activity := parseAndFormatMessage(text)
+		if activity != nil {
+			updateDiscordStatus(activity.Type, activity.Name)
+		}
 		if message != "" {
 			messagesToDiscord <- message
 		}
@@ -372,18 +453,20 @@ func sendDiscordStatusUpdates(discord *discordgo.Session) {
 		})
 		if err != nil {
 			log.WithError(err).Errorln("Failed to update Discord status")
+			continue
 		}
 		log.Debugln("Updated status to " + activityToStatus(&activity))
 	}
 }
 
 func setUpRCON() *rcon.Client {
-	rconClient := rcon.New(fmt.Sprintf("%s:%d", config.rconIp, config.rconPort), config.rconPassword, time.Second*2)
+	address := net.JoinHostPort(config.rconIp, strconv.Itoa(config.rconPort))
+	rconClient := rcon.New(address, config.rconPassword, time.Second*2)
 	updatePlayerCount(rconClient)
 	return rconClient
 }
 
-func getSeedFromFactorio(rconClient *rcon.Client) string {
+func getSeedFromFactorio(rconClient RconClient) string {
 	if seed != "" {
 		return seed
 	}
@@ -392,7 +475,7 @@ func getSeedFromFactorio(rconClient *rcon.Client) string {
 		log.WithFields(logrus.Fields{"err": err}).Error("Could not get seed from Factorio")
 		return "Unknown"
 	}
-	seed = msg
+	seed = strings.TrimSpace(msg)
 	return seed
 }
 
@@ -402,16 +485,25 @@ func getPlayersOnlineFromFactorio(rconClient RconClient) (int, error) {
 		log.WithFields(logrus.Fields{"err": err}).Error("Could not get player count from Factorio")
 		return 0, err
 	}
-	playersOnline, err = strconv.Atoi(strings.Split(strings.Split(msg, "(")[1], ")")[0])
+	match := rePlayersOnline.FindStringSubmatch(msg)
+	if match == nil {
+		log.WithFields(logrus.Fields{"response": msg}).Error("Could not parse player count from Factorio")
+		return 0, errors.New("unexpected response to the player count command")
+	}
+	playersOnline, err := strconv.Atoi(match[1])
 	if err != nil {
-		log.WithFields(logrus.Fields{"err": err}).Panic("Could not parse player count from Factorio")
+		log.WithFields(logrus.Fields{"err": err, "response": msg}).Error("Could not parse player count from Factorio")
 		return 0, err
 	}
 	return playersOnline, nil
 }
 
 func updatePlayerCount(rconClient RconClient) {
-	_, _ = getPlayersOnlineFromFactorio(rconClient)
+	playersOnline, err := getPlayersOnlineFromFactorio(rconClient)
+	if err != nil {
+		// Already logged, keep the current status
+		return
+	}
 	if playersOnline > 0 {
 		updateDiscordStatus(discordgo.ActivityTypeWatching, "the factory grow")
 	} else {
@@ -420,32 +512,28 @@ func updatePlayerCount(rconClient RconClient) {
 }
 
 func setUpDiscord() *discordgo.Session {
-	discordToken := config.discordToken
-
-	discord, err := discordgo.New("Bot " + discordToken)
+	discord, err := discordgo.New("Bot " + config.discordToken)
 	if err != nil {
-		log.WithFields(logrus.Fields{"err": err, "token": discordToken}).Panic("Could register bot with Discord")
-		return nil
+		log.WithError(err).Fatal("Could not register bot with Discord")
 	}
 
-	// Listen to incoming messagesToDiscord from Discord
+	// Listen to incoming messages from Discord (the content of a message requires a separate, privileged, intent)
 	discord.AddHandler(onReceiveDiscordMessage)
-	discord.Identify.Intents = discordgo.IntentsGuildMessages
+	discord.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentMessageContent
 
 	// Open socket to Discord
-	if discord.Open() != nil {
-		log.WithFields(logrus.Fields{"err": err}).Panic("Cannot open socket to Discord")
+	if err := discord.Open(); err != nil {
+		log.WithError(err).Fatal("Cannot open socket to Discord (is the 'Message Content Intent' enabled for your bot?)")
 	}
 
-	log.Infoln("Bot registered by Discord and is now listening for messagesToDiscord")
-	discordActivities = make(chan discordgo.Activity)
+	log.Infoln("Bot registered by Discord and is now listening for messages")
 	go sendDiscordStatusUpdates(discord)
 	// Set initial status
 	updateDiscordStatus(discordgo.ActivityTypeWatching, "the world burn")
 	return discord
 }
 
-func handleCommands(rconClient *rcon.Client) {
+func handleCommands(rconClient RconClient) {
 	for command := range commands {
 		switch command {
 		case "!online":
@@ -453,10 +541,8 @@ func handleCommands(rconClient *rcon.Client) {
 			if err == nil {
 				messagesToDiscord <- strconv.Itoa(playersOnline) + " players online"
 			}
-			break
 		case "!seed":
 			messagesToDiscord <- getSeedFromFactorio(rconClient)
-			break
 		case "!evolution":
 			msg, err := rconClient.Execute("/evolution")
 			if err != nil {
@@ -464,7 +550,6 @@ func handleCommands(rconClient *rcon.Client) {
 				msg = "Unknown"
 			}
 			messagesToDiscord <- msg
-			break
 		}
 	}
 }
@@ -480,7 +565,6 @@ func checkRequiredEnvVariables() {
 
 // See Readme for possible settings
 type botConfig struct {
-	logLevel          string
 	discordToken      string
 	discordChannelId  string
 	rconIp            string

@@ -56,7 +56,7 @@ This bot uses environment variable to configure. Or an `.env` file in the same d
 Here is a list of all variables available:
 
 ```
-LOG_LEVEL=info (optional) # This is the log level, when submitting a bug please set this to debug
+LOG_LEVEL=info (optional) # This is the log level (debug, info, warning, error), when submitting a bug please set this to debug
 DISCORD_TOKEN=xx # The Discord Authentication token for your bot
 DISCORD_CHANNEL_ID=xx # The Discord channel ID 
 RCON_IP=xx # The IP of your Factorio server, a hostname is also allowed
@@ -114,9 +114,9 @@ Do you use Unraid? Let me know then I can see if I can provide a template!
 
 ```
 Unix:
-GOOS=linux GARCH=amd64 CGO_ENABLED=0 go build -ldflags "-X main.VERSION=$(git rev-parse --short HEAD) -X main.BUILDTIME=`date -u +%Y%m%d.%H%M%S`" -o ./bin/factorigo-chat-bot
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-X main.VERSION=$(git rev-parse --short HEAD) -X main.BUILDTIME=`date -u +%Y%m%d.%H%M%S`" -o ./bin/factorigo-chat-bot
 Windows:
-GOOS=windows GARCH=amd64 CGO_ENABLED=0 go build -ldflags "-X main.VERSION=$(git rev-parse --short HEAD) -X main.BUILDTIME=$(date -u +%Y%m%d.%H%M%S)" -o ./bin/factorigo-chat-bot.exe
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-X main.VERSION=$(git rev-parse --short HEAD) -X main.BUILDTIME=$(date -u +%Y%m%d.%H%M%S)" -o ./bin/factorigo-chat-bot.exe
 ```
 
 If you don't have a build environment:

@@ -51,7 +51,7 @@ jobs:
         run: go vet ./...
 
       - name: Test
-        run: go test -v ./...
+        run: go test -v -race ./...
 
   build:
     name: Build
@@ -61,7 +61,7 @@ jobs:
       # Images are pushed for version tags (vX.Y.Z + latest) and for pull requests from this
       # repository (pr-N). Forks and Dependabot have no access to the Docker Hub secrets, so
       # for those (and for pushes to main) the image is only built, not pushed.
-      PUSH_IMAGE: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]') }}
+      PUSH_IMAGE: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]') }}
     steps:
       - name: Check out repository code
         uses: actions/checkout@v7
