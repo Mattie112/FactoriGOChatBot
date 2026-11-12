@@ -2,18 +2,21 @@ package main
 
 import (
 	"errors"
-	"github.com/bwmarrin/discordgo"
-	"github.com/sirupsen/logrus"
 	"net"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/bwmarrin/discordgo"
+	"github.com/sirupsen/logrus"
 )
 
+var reHostname = regexp.MustCompile(`^([a-zA-Z0-9_]([a-zA-Z0-9_-]*[a-zA-Z0-9_])?\.)*[a-zA-Z0-9_]([a-zA-Z0-9_-]*[a-zA-Z0-9_])?$`)
+
 func schedule(delay time.Duration, what func()) chan struct{} {
-	ticker := time.NewTicker(delay * time.Second)
+	ticker := time.NewTicker(delay)
 	quit := make(chan struct{})
 	go func() {
 		for {
@@ -30,22 +33,15 @@ func schedule(delay time.Duration, what func()) chan struct{} {
 }
 
 func getLoggerFromConfig(logLevel string) *logrus.Logger {
-	logLevel = strings.ToLower(logLevel)
 	log := logrus.New()
 	log.SetFormatter(&logrus.TextFormatter{ForceQuote: true, TimestampFormat: time.RFC3339Nano})
 
-	switch logLevel {
-	case "debug":
-		log.Level = logrus.DebugLevel
-	case "info":
-		log.Level = logrus.InfoLevel
-	case "warning":
-		log.Level = logrus.WarnLevel
-	case "fatal":
-		log.Level = logrus.FatalLevel
-	default:
-		log.Level = logrus.InfoLevel
+	// Supports: trace, debug, info, warn(ing), error, fatal and panic. Anything else (or nothing) means info
+	level, err := logrus.ParseLevel(strings.TrimSpace(logLevel))
+	if err != nil {
+		level = logrus.InfoLevel
 	}
+	log.Level = level
 	return log
 }
 
@@ -74,14 +70,13 @@ func validateIpOrHostname(input string) (string, error) {
 		return input, nil
 	}
 
-	// Check if input is a valid hostname
-	hostnameRegex := `^(([a-zA-Z]|[a-zA-Z][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z]|[A-Za-z][A-Za-z0-9\-]*[A-Za-z0-9])$`
-	matched, err := regexp.MatchString(hostnameRegex, input)
-	if err != nil {
-		return "", err
-	}
-	if matched {
-		return input, nil
+	// Check if input is a valid hostname. Labels may start with a digit and may contain underscores (not valid in
+	// DNS, but common for Docker container names). The last label cannot be numeric, that would be a (broken) IP.
+	if reHostname.MatchString(input) {
+		lastLabel := input[strings.LastIndex(input, ".")+1:]
+		if _, err := strconv.Atoi(lastLabel); err != nil {
+			return input, nil
+		}
 	}
 
 	return "", errors.New("input is neither a valid IP address nor a valid hostname")
