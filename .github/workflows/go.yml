@@ -82,10 +82,16 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "buildtime=$(date -u +%Y%m%d.%H%M%S)" >> "$GITHUB_OUTPUT"
 
-      - name: Build Linux
+      # The Linux binaries are stored per architecture (bin/linux-<arch>/), the Dockerfile picks the right one
+      - name: Build Linux (amd64)
         env:
           LDFLAGS: -s -w -X main.VERSION=${{ steps.version.outputs.version }} -X main.BUILDTIME=${{ steps.version.outputs.buildtime }}
-        run: GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -v -trimpath -ldflags "$LDFLAGS" -o bin/factorigo-chat-bot
+        run: GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -v -trimpath -ldflags "$LDFLAGS" -o bin/linux-amd64/factorigo-chat-bot
+
+      - name: Build Linux (arm64)
+        env:
+          LDFLAGS: -s -w -X main.VERSION=${{ steps.version.outputs.version }} -X main.BUILDTIME=${{ steps.version.outputs.buildtime }}
+        run: GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -v -trimpath -ldflags "$LDFLAGS" -o bin/linux-arm64/factorigo-chat-bot
 
       - name: Build Windows
         env:
@@ -96,7 +102,14 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: factorigo-chat-bot-unix
-          path: ./bin/factorigo-chat-bot
+          path: ./bin/linux-amd64/factorigo-chat-bot
+          if-no-files-found: error
+
+      - name: Upload Unix (arm64) binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: factorigo-chat-bot-unix-arm64
+          path: ./bin/linux-arm64/factorigo-chat-bot
           if-no-files-found: error
 
       - name: Upload Windows binary
@@ -126,10 +139,15 @@ jobs:
             type=ref,event=tag
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
 
+      # Required to build an image for more than one platform
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
       - name: Build and push Docker image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
+          platforms: linux/amd64,linux/arm64
           push: ${{ env.PUSH_IMAGE == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -151,9 +169,10 @@ jobs:
         run: |
           mkdir dist
           mv artifacts/factorigo-chat-bot-unix/factorigo-chat-bot dist/factorigo-chat-bot-unix
+          mv artifacts/factorigo-chat-bot-unix-arm64/factorigo-chat-bot dist/factorigo-chat-bot-unix-arm64
           mv artifacts/factorigo-chat-bot-windows/factorigo-chat-bot.exe dist/factorigo-chat-bot.exe
           cd dist
-          sha256sum factorigo-chat-bot-unix factorigo-chat-bot.exe > checksums.txt
+          sha256sum factorigo-chat-bot-unix factorigo-chat-bot-unix-arm64 factorigo-chat-bot.exe > checksums.txt
           cat checksums.txt
 
       - name: Publish GitHub release
