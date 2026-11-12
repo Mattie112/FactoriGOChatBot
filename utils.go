@@ -45,13 +45,6 @@ func getLoggerFromConfig(logLevel string) *logrus.Logger {
 	return log
 }
 
-func getEnvStrOrDefault(key, defaultVal string) string {
-	if value, exists := os.LookupEnv(key); exists {
-		return value
-	}
-	return defaultVal
-}
-
 func getEnvOrDefaultBool(key string, defaultVal bool) bool {
 	if value, exists := os.LookupEnv(key); exists {
 		b, err := strconv.ParseBool(value)
