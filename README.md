@@ -93,7 +93,8 @@ Default layout (and commands disabled): compatible with achievements
 
 ### Binaries (Windows / Unix)
 
-Simply download the Unix or Windows binary from this repo and run the executeable. You will need to pass some
+Simply download the Unix or Windows binary from this repo and run the executeable. For Unix there is also an ARM
+binary (`factorigo-chat-bot-unix-arm64`), for example for a Raspberry Pi (64-bit). You will need to pass some
 configuration. You can either create a file called `.env` (keep it in the same directory as the executable) or create a
 script that first sets these variables. For example in Windows a `.bat` file cound be created with the following:
 
@@ -107,6 +108,7 @@ factorigo-chat-bot.exe
 ### Docker
 
 Get the image from https://hub.docker.com/r/mattie112/factorigo-chat-bot and run it with the variables as listed above.
+The image is available for `amd64` and `arm64`, Docker picks the right one automatically.
 
 Example command:
 
@@ -122,7 +124,9 @@ Do you use Unraid? Let me know then I can see if I can provide a template!
 
 ```
 Unix:
-GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-X main.VERSION=$(git rev-parse --short HEAD) -X main.BUILDTIME=`date -u +%Y%m%d.%H%M%S`" -o ./bin/factorigo-chat-bot
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-X main.VERSION=$(git rev-parse --short HEAD) -X main.BUILDTIME=`date -u +%Y%m%d.%H%M%S`" -o ./bin/linux-amd64/factorigo-chat-bot
+Unix (ARM):
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "-X main.VERSION=$(git rev-parse --short HEAD) -X main.BUILDTIME=$(date -u +%Y%m%d.%H%M%S)" -o ./bin/linux-arm64/factorigo-chat-bot
 Windows:
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-X main.VERSION=$(git rev-parse --short HEAD) -X main.BUILDTIME=$(date -u +%Y%m%d.%H%M%S)" -o ./bin/factorigo-chat-bot.exe
 ```
@@ -132,8 +136,12 @@ Run: `docker-compose run --rm builder` then copy/paste the commands listed above
 
 In order to build a docker image, first run the commands above and then:
 
-- `docker build -t mattie112/factorigo-chat-bot:latest .`
+- `docker build -t mattie112/factorigo-chat-bot:latest .` (this uses the Unix binary that matches your machine)
 - `docker push mattie112/factorigo-chat-bot:latest`
+
+Or to build (and push) the image for both architectures at once:
+
+- `docker buildx build --platform linux/amd64,linux/arm64 -t mattie112/factorigo-chat-bot:latest --push .`
 
 ## Extra data supported:
 
