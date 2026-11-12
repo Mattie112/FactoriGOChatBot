@@ -388,7 +388,7 @@ func parseDiscordMessage(message string) []string {
 	if gomoji.ContainsEmoji(message) {
 		res := gomoji.FindAll(message)
 		for _, emoji := range res {
-			message = strings.Replace(message, emoji.Character, "**"+emoji.Slug+"**", -1)
+			message = strings.ReplaceAll(message, emoji.Character, "**"+emoji.Slug+"**")
 		}
 	}
 	message = reCustomEmoji.ReplaceAllString(message, ":$1:")
