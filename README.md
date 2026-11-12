@@ -1,5 +1,13 @@
 # FactoriGOChatBot
 
+[![Go test and build](https://github.com/Mattie112/FactoriGOChatBot/actions/workflows/go.yml/badge.svg?branch=main)](https://github.com/Mattie112/FactoriGOChatBot/actions/workflows/go.yml)
+[![Latest release](https://img.shields.io/github/v/release/Mattie112/FactoriGOChatBot)](https://github.com/Mattie112/FactoriGOChatBot/releases/latest)
+[![Go version](https://img.shields.io/github/go-mod/go-version/Mattie112/FactoriGOChatBot)](go.mod)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Mattie112/FactoriGOChatBot)](https://goreportcard.com/report/github.com/Mattie112/FactoriGOChatBot)
+[![Docker pulls](https://img.shields.io/docker/pulls/mattie112/factorigo-chat-bot)](https://hub.docker.com/r/mattie112/factorigo-chat-bot)
+[![License](https://img.shields.io/github/license/Mattie112/FactoriGOChatBot)](LICENSE)
+[![The factory must grow](https://img.shields.io/badge/the%20factory-must%20grow-orange)](https://factorio.com)
+
 A Discord chatbot for Factorio written in Golang
 
 This bot will work without mods. It supports chat messages and player join/quit. If you want to be able to see more
