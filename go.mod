@@ -4,7 +4,7 @@ go 1.23
 
 require (
 	github.com/bwmarrin/discordgo v0.28.1
-	github.com/forPelevin/gomoji v1.2.0
+	github.com/forPelevin/gomoji v1.3.0
 	github.com/forewing/csgo-rcon v1.3.0
 	github.com/joho/godotenv v1.5.1
 	github.com/nxadm/tail v1.4.11
